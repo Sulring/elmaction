@@ -2,6 +2,8 @@
 A very simple top-down shooter game written in elm using [elm-webgl](https://github.com/elm-community/elm-webgl/)
 The goal is simple: kill enemies and try not to die.
 
+**[DEMO](http://sulring.github.io)**
+
 **Default controls:**
 WASD + Mouse
 
