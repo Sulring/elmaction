@@ -171,19 +171,24 @@ update action model =
             ( { model | textures = Dict.fromList textures }, Cmd.none)
 
         Animate dt ->
-            let
-                dirs = directions model.keys
+            if model.status == Game
+                then
 
-                characterAttributes = getCharacterAttributes model playerActor
+                    let
+                        dirs = directions model.keys
 
-                actorManager = updateActorManager dt model
-                actorsAlive = fireCommandsAndkillActors actorManager
-                counter = model.counter + 1
-                last_i = if counter > 5000 then 1 else model.last_i
-            in
-                ( { model | actorManager = fst actorsAlive
-                          , counter = counter
-                          , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
+                        characterAttributes = getCharacterAttributes model playerActor
+
+                        actorManager = updateActorManager dt model
+                        actorsAlive = fireCommandsAndkillActors actorManager
+                        counter = model.counter + 1
+                        last_i = if counter > 5000 then 1 else model.last_i
+                    in
+                        ( { model | actorManager = fst actorsAlive
+                                  , counter = counter
+                                  , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
+                else
+                    (model, Cmd.none)
 
         UpdateMouse pos ->
             ( { model | mousePosition = pos, lookAt = (calculateDirection pos model.wsize) }, Cmd.none )
@@ -760,14 +765,14 @@ fetchTextures : Task Error (List ( String, Texture ))
 fetchTextures =
     Task.sequence
         (List.map fetchTexture
-            [ ( "ground", "/texture/ground512.png" )
-            , ( "assault", "/texture/acharacter.png")
-            , ( "grenade", "/texture/iconGrenade.png")
-            , ( "grenadeActive", "/texture/iconGrenadeActive.png")
-            , ( "healthIcon", "/texture/healthIcon.png")
-            , ( "grenadeCrate", "/texture/grenadeCrate.png")
-            , ( "healthCrate", "/texture/healthCrate.png")
-            , ( "slug", "/texture/bullet.png")
+            [ ( "ground", "texture/ground512.png" )
+            , ( "assault", "texture/acharacter.png")
+            , ( "grenade", "texture/iconGrenade.png")
+            , ( "grenadeActive", "texture/iconGrenadeActive.png")
+            , ( "healthIcon", "texture/healthIcon.png")
+            , ( "grenadeCrate", "texture/grenadeCrate.png")
+            , ( "healthCrate", "texture/healthCrate.png")
+            , ( "slug", "texture/bullet.png")
             ]
         )
 
@@ -1037,7 +1042,7 @@ view model =
             player = getCharacterAttributes model playerActor
       in
         if model.status == GameOver
-            then body [] [ div [] [text "GAMEOVER"]]
+            then body [] [ div [] [text "GAMEOVER"], div [id "blood"] []]
             else if model.status == Won
                     then body [] [ div [] [text "CONGRATULATIONS!"]]
                     else
