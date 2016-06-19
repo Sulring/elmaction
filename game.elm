@@ -801,7 +801,7 @@ init =
       , mousePosition = { x = 0, y = 0 }
       , keys = Keys False False False False False False
       , lookAt = Math.Matrix4.identity
-      , status = Game
+      , status = MainMenu
       , actorManager = actorManager
       , last_i = 0
       , counter = 0
@@ -1036,14 +1036,47 @@ addActorsToScene model =
     in
         List.foldl (++) [] (mappedList)
 
+mainMenu : Html Msg
+mainMenu =
+    body [] [ div [id "menuOverlay"] []
+            , div [id "menuBg"] []
+            , div [id "play"] []
+            , div [id "options"] []
+            , div [id "credits"] []
+            ]
+credits : Html Msg
+credits =
+    body [] [ div [id "creditlist"]
+                [ div [id "creditsheader"] [ text "CREDITS"]
+                , div [] [ text "programming - Ilya Bolotin"]
+                , div [] [ text "ui design - Ilya Bolotin"]
+                , div [] [ text "textures - Tatermand"]
+                , div [] [ text "music - Alexandr Zhelanov"]
+                , div [] [ text "sound - ProductionCrate (productioncrate.com)"]
+
+                ]
+            ]
+
 view : Model -> Html Msg
 view model =
       let
             player = getCharacterAttributes model playerActor
       in
-        if model.status == GameOver
-            then body [] [ div [] [text "GAMEOVER"], div [id "blood"] []]
-            else if model.status == Won
+        case model.status of
+            GameOver ->
+                body [] [ div [] [text "GAMEOVER"], div [id "blood"] []]
+            MainMenu ->
+                mainMenu
+            Credits ->
+                credits
+            EnterName ->
+                body [] []
+            Won ->
+                body [] []
+            Highscore ->
+                body [] []
+            Game ->
+                if model.status == Won
                     then body [] [ div [] [text "CONGRATULATIONS!"]]
                     else
                         body []

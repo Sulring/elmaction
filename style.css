@@ -46,6 +46,17 @@
      -1px 1px 0 #000,
      1px 1px 0 #000;
 }
+#creditlist {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  text-align: center;
+  font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+  font-size: 40;
+  font-weight: 400;
+}
 #blood {
      position: fixed;
      width: 100%;
@@ -75,4 +86,65 @@ img.rocket {
 }
 #rocket3 {
   right :95px;
+}
+#menuOverlay {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  background-color: white;
+  left: 0;
+  top: 0;
+  z-index: 0
+}
+#menuBg {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  margin-top: -200px;
+  margin-left: -250px;
+  width: 500px;
+  height: 400px;
+  background-image: url(texture/menubg.png)
+  left: 0;
+  top: 0;
+  z-index: 0
+}
+#play {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 460px;
+  height: 80px;
+  margin-top: -120px;
+  margin-left: -230px;
+  background-image: url(texture/playInactive.png)
+}
+#play:hover {
+  background-image: url(texture/playActive.png)
+}
+#options {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 460px;
+  height: 80px;
+  margin-top: -40px;
+  margin-left: -230px;
+  background-image: url(texture/optionsInactive.png)
+}
+#options:hover {
+  background-image: url(texture/optionsActive.png)
+}
+#credits {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 460px;
+  height: 80px;
+  margin-top: 40px;
+  margin-left: -230px;
+  background-image: url(texture/creditsInactive.png)
+}
+#credits:hover {
+  background-image: url(texture/creditsActive.png)
 }
