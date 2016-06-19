@@ -1,0 +1,78 @@
+@import url(https://fonts.googleapis.com/css?family=Orbitron:400,900);
+* {
+    margin:0;
+    padding: 0;
+    cursor:  auto;
+    cursor:  url(texture/cursor2.png) 4 12, auto;
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none;   /* Chrome/Safari/Opera */
+    -khtml-user-select: none;    /* Konqueror */
+    -moz-user-select: none;      /* Firefox */
+    -ms-user-select: none;       /* Internet Explorer/Edge */
+    user-select: none;           /* Non-prefixed version, currently */
+  }
+#health {
+  position: fixed;
+  left: 110px;
+  bottom: 7px;
+  font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+  font-size: 80;
+  font-weight: 900;
+  color: #D80000;
+  text-shadow:
+   -1px -1px 0 #000,
+   1px -1px 0 #000,
+   -1px 1px 0 #000,
+   1px 1px 0 #000;
+}
+#healthicon {
+    position: fixed;
+    left: 15px;
+    bottom: 15px;
+    width: 80px;
+    height: 80px;
+}
+#score {
+    position: fixed;
+    left: 15px;
+    top: 0px;
+    font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+    font-size: 80;
+    font-weight: 900;
+    color:#FFD700;
+    text-shadow:
+     -1px -1px 0 #000,
+     1px -1px 0 #000,
+     -1px 1px 0 #000,
+     1px 1px 0 #000;
+}
+#blood {
+     position: fixed;
+     width: 100%;
+     height: 100%;
+     left: 0;
+     top: 0;
+     background-image: url("texture/bloodiedOverlay.png");
+     background-size:100% 100%;
+     -ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=0)";
+     filter: alpha(opacity=0);
+     -moz-opacity: 0;
+     -khtml-opacity: 0;
+     opacity: 0;
+
+}
+img.rocket {
+  position: fixed;
+  bottom : 15px;
+  width: 80px;
+  height: 80px;
+}
+#rocket1 {
+  right :15px;
+}
+#rocket2 {
+  right :55px;
+}
+#rocket3 {
+  right :95px;
+}
