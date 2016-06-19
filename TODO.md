@@ -7,3 +7,8 @@
 * Additional textures
 * Fix disappearing enemies bug
 * Clean up
+
+#### Optional items
+* Add more character classes
+* Refine AI
+* Multiplayer
