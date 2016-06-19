@@ -17,6 +17,6 @@
 * [ ] Clean up the source code
 
 #### Optional items
-* [ ] Add more character classes
-* [ ] Refine AI
-* [ ] Multiplayer
+* [ ] (optional) Add more character classes
+* [ ] (optional) Refine AI
+* [ ] (optional) Multiplayer
