@@ -14,6 +14,7 @@
     * [ ] Rockets
 * [ ] Additional textures for enemies
 * [ ] Fix disappearing enemies bug
+* [ ] Fix enemies sticking together on collision bug
 * [ ] Clean up the source code
 
 #### Optional items
