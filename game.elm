@@ -449,7 +449,7 @@ updateActorManagerList dt model am amList =
                             checkedCharacterAttributes = getCA checkedActor
                             newCharacterAttributes = { checkedCharacterAttributes | timeSinceLastFire = checkedCharacterAttributes.timeSinceLastFire + ( floor dt ) }
                             newActor = { actor | animation = animateSprite dt moving checkedActor.texture checkedActor.animation
-                                               , timeToLive = if newCharacterAttributes.health == 0 then Just 0 else checkedActor.timeToLive
+                                               , timeToLive = if newCharacterAttributes.health <= 0 then Just 0 else checkedActor.timeToLive
                                                , characterAttributes = Just newCharacterAttributes
                                                , rotation = model.lookAt
                                                , position = newPosition
@@ -1150,11 +1150,7 @@ view model =
                 body [] []
             Highscore ->
                 body [] []
-            Game ->
-                if model.status == Won
-                    then
-                    else
-                        body []
+            Game -> body []
                       [ ( addActorsToScene model ) |> WebGL.toHtmlWith [ BlendFunc ( SrcAlphaSaturate , DstAlpha), Enable Blend ] [ width model.wsize.width, height model.wsize.height  ]
                       , img [src "texture/healthIcon.png", id "healthicon"] []
                       , div [id "health"] [text (toString player.health)]
