@@ -26,6 +26,9 @@ import Random
 type Status
     = MainMenu
     | Credits
+    | Options
+    | Speed
+    | Difficulty
     | EnterName                                          -- Entering Player name
     | Highscore                                          -- showing Highscores
     | Game                                               -- Game is running
@@ -45,6 +48,8 @@ type alias Model =
     , actorManager : ActorManager                       -- objects/characters/decals/collisions
     , last_i : Int
     , counter : Float
+    , gameSpeed : Float
+    , gameDifficulty : Bool
     }
 
 
@@ -90,6 +95,9 @@ type Msg
     | GetRandomFireRate Int
     | RandomFireRate (List Int)
     | AddScore Int
+    | SetGameSpeed Float
+    | SetGameDifficulty Bool
+    | ExitButton
 
 type Collision = Collision
     { blocking : Bool                                   -- collision type. True = Blocking / False = Overlapping
@@ -265,10 +273,30 @@ update action model =
                     newPosition = Math.Vector3.add position  (transform direction (vec3 0 -0.3 0))
             in
                 ({ model | last_i = model.last_i + 1
-                         , actorManager = Dict.insert slugname ( templateSlugActor ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
+                         , actorManager = Dict.insert slugname ( templateSlugActor model.gameSpeed ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
 
         ChangeStatus s ->
             ({model | status = s}, Cmd.none)
+
+        SetGameSpeed i ->
+            ({model | gameSpeed = i}, Task.perform SoundError ChangeStatus (succeed Options))
+
+        SetGameDifficulty i ->
+            ({model | gameDifficulty = i}, Task.perform SoundError ChangeStatus (succeed Options))
+        ExitButton ->
+            (model, Task.perform SoundError
+                        ChangeStatus
+                        (succeed (case model.status of
+                                    MainMenu -> MainMenu
+                                    Options -> MainMenu
+                                    Speed -> Options
+                                    Difficulty -> Options
+                                    Credits -> MainMenu
+                                    Game -> MainMenu
+                                    Highscore -> MainMenu
+                                    EnterName -> EnterName
+                                    Won -> MainMenu
+                                    GameOver -> MainMenu)))
 
 intList : Random.Generator (List Int)
 intList = Random.list 4 (Random.int -100 100 )
@@ -362,7 +390,7 @@ checkCollisions actorKey actor position am =
             =  case a.collision of
                     Nothing -> False
                     Just x -> let (Collision y) = x
-                              in y.blocking 
+                              in y.blocking
                               && log "Collides" (collide (log "Collide 1" actor.position) actor.size (log "Collide 2" a.position) a.size)    -- does it collide with first Actor?
 
         dict = Dict.remove actorKey am                                                    -- removing Actor from list (don't need to check collisions on self)
@@ -409,7 +437,7 @@ updateActorManagerList dt model am amList =
                             moving = if dirs.x /= 0 || dirs.y /=0
                                         then Just ( normalize ( vec3 (toFloat dirs.x) (toFloat dirs.y) 0 ) )
                                         else Nothing
-                            worldTransformationMatrix = makeWorldTranslation actor.position dt dirs model.lookAt
+                            worldTransformationMatrix = makeWorldTranslation model.gameSpeed actor.position dt dirs model.lookAt
                             newPosition = transform worldTransformationMatrix (vec3 0 0 0)
                             newAm = checkCollisions key actor newPosition am
                             checkedActor =
@@ -441,8 +469,8 @@ updateActorManagerList dt model am amList =
                             (v,cmd) = ai actor model
 
                             translationVector = case (log "MovesTo" actor.movesTo) of
-                                Nothing -> Math.Vector3.scale ((actor.speed * gameSpeed * dt) / 10000) (Math.Vector3.normalize (Math.Vector3.sub v actor.position))
-                                Just x -> Math.Vector3.scale ((actor.speed * gameSpeed * dt) / 10000) (Math.Vector3.normalize (Math.Vector3.sub x actor.position))
+                                Nothing -> Math.Vector3.scale ((actor.speed * model.gameSpeed * dt) / 10000) (Math.Vector3.normalize (Math.Vector3.sub v actor.position))
+                                Just x -> Math.Vector3.scale ((actor.speed * model.gameSpeed * dt) / 10000) (Math.Vector3.normalize (Math.Vector3.sub x actor.position))
                             translation = makeTranslate translationVector
                             tPosition = transform translation actor.position
 
@@ -518,7 +546,7 @@ updateActorManagerList dt model am amList =
 
                             translationVector =
                                 if actor.moves
-                                    then Math.Vector3.scale ((actor.speed * gameSpeed * dt) / 10000) (Math.Vector3.normalize (transform actor.rotation (vec3 0 -1 0)))
+                                    then Math.Vector3.scale ((actor.speed * model.gameSpeed * dt) / 10000) (Math.Vector3.normalize (transform actor.rotation (vec3 0 -1 0)))
                                     else vec3 0 0 0
                             translation = makeTranslate translationVector
                             tPosition = transform translation actor.position
@@ -609,8 +637,8 @@ templatePlayerActor name =     { key = name
                                , fireCommand = Nothing
                                }
 
-templateEnemyActor : String -> Vec3 -> Float -> Actor
-templateEnemyActor name p i  =     { key = name
+templateEnemyActor : Float ->String -> Vec3 -> Float -> Actor
+templateEnemyActor gameSpeed name p i  =     { key = name
                                , actorType = NPC
                                , actorSubType = Nothing
                                , characterAttributes = Just { health = 100
@@ -658,8 +686,8 @@ bulletHit actor =
     in
         { actor | characterAttributes = newCharacterAttributes }
 
-templateSlugActor : Int -> Vec3 -> Mat4 -> Actor
-templateSlugActor i p r  =
+templateSlugActor : Float -> Int -> Vec3 -> Mat4 -> Actor
+templateSlugActor gameSpeed i p r  =
     let
         name = toString i
     in
@@ -721,10 +749,10 @@ templateGroundActor =          { key = "ground"
 
 actorManager : ActorManager
 actorManager = Dict.fromList [ ("Player1", templatePlayerActor "Player1")
-                             , ("Enemy1", templateEnemyActor "Enemy1" (vec3 2 2 -4.99) 1000)
-                             , ("Enemy2", templateEnemyActor "Enemy2" (vec3 3 -2 -4.99) 800)
-                             , ("Enemy3", templateEnemyActor "Enemy3" (vec3 -3 0 -4.99) 1200)
-                             , ("Enemy4", templateEnemyActor "Enemy4" (vec3 -3 3 -4.99) 1100)
+                             , ("Enemy1", templateEnemyActor 10 "Enemy1" (vec3 2 2 -4.99) 1000)
+                             , ("Enemy2", templateEnemyActor 10 "Enemy2" (vec3 3 -2 -4.99) 800)
+                             , ("Enemy3", templateEnemyActor 10 "Enemy3" (vec3 -3 0 -4.99) 1200)
+                             , ("Enemy4", templateEnemyActor 10 "Enemy4" (vec3 -3 3 -4.99) 1100)
                              , ("ground", templateGroundActor)
                              ]
 
@@ -808,6 +836,8 @@ init =
       , actorManager = actorManager
       , last_i = 0
       , counter = 0
+      , gameSpeed = 7
+      , gameDifficulty = False
       }
     , Cmd.batch
         [ Window.size |> windowSize
@@ -823,9 +853,9 @@ mouseClicks position = MouseClicks position
 
 keyPressed : Keyboard.KeyCode -> Msg
 keyPressed keyCode =
-    case keyCode of
-        case 27 -> ExitButton
-        case 13 -> SelectButton
+    case (log "KEYCODE" keyCode) of
+        27 -> ExitButton
+        _ -> (Basics.identity,Nothing) |> KeyChange
 
 keyChange : Bool -> Keyboard.KeyCode -> Msg
 keyChange on keyCode =
@@ -900,11 +930,8 @@ calculateDirection pos wsize =
     in
         makeRotateBetween d v
 
-gameSpeed : Float
-gameSpeed = 10
-
-makeWorldTranslation : Vec3 -> Float -> { x : Int, y : Int } -> Mat4 -> Mat4
-makeWorldTranslation pos dt {x,y} lookAt =
+makeWorldTranslation : Float -> Vec3 -> Float -> { x : Int, y : Int } -> Mat4 -> Mat4
+makeWorldTranslation gameSpeed pos dt {x,y} lookAt =
     let
         d = vec3 (toFloat x) (toFloat y) 0
         dir = if length d > 1 then normalize d else d
@@ -916,6 +943,7 @@ subscriptions _ =
     [ AnimationFrame.diffs Animate
     , Keyboard.downs (keyChange True)
     , Keyboard.ups (keyChange False)
+    , Keyboard.downs keyPressed
     , Mouse.clicks(mouseClicks)
     , Window.resizes WindowSizeSuccess
     , Mouse.moves (\{ x, y } -> UpdateMouse { x = x, y = y })
@@ -1050,13 +1078,40 @@ mainMenu : Html Msg
 mainMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "play", onClick (ChangeStatus Game)] []
-            , div [id "options"] []
-            , div [id "credits", onClick (ChangeStatus Credits)] []
+            , div [id "play", class "first", onClick (ChangeStatus Game)] []
+            , div [id "options", class "second", onClick (ChangeStatus Options)] []
+            , div [id "credits", class "third", onClick (ChangeStatus Credits)] []
             ]
+optionsMenu : Html Msg
+optionsMenu =
+    body [] [ div [id "menuOverlay"] []
+            , div [id "menuBg"] []
+            , div [id "difficulty", class "first", onClick (ChangeStatus Difficulty)] []
+            , div [id "speed", class "second", onClick (ChangeStatus Speed)] []
+            , div [id "back", class "third", onClick (ChangeStatus MainMenu)] []
+            ]
+
+speedMenu : Html Msg
+speedMenu =
+    body [] [ div [id "menuOverlay"] []
+            , div [id "menuBg"] []
+            , div [id "fast", class "first", onClick (SetGameSpeed 10)] []
+            , div [id "normal", class "second", onClick (SetGameSpeed 7)] []
+            , div [id "back", class "third", onClick (ChangeStatus Options)] []
+            ]
+
+difficultyMenu : Html Msg
+difficultyMenu =
+    body [] [ div [id "menuOverlay"] []
+            , div [id "menuBg"] []
+            , div [id "hard", class "first", onClick (SetGameDifficulty True)] []
+            , div [id "normal", class "second", onClick (SetGameDifficulty False)] []
+            , div [id "back", class "third", onClick (ChangeStatus Options)] []
+            ]
+
 credits : Html Msg
 credits =
-    body [] [ div [id "creditlist"]
+    body [] [ div [id "creditlist", onClick (ChangeStatus MainMenu)]
                 [ div [id "creditsheader"] [ text "CREDITS"]
                 , div [] [ text "programming - Ilya Bolotin"]
                 , div [] [ text "ui design - Ilya Bolotin"]
@@ -1081,6 +1136,12 @@ view model =
                 mainMenu
             Credits ->
                 credits
+            Options ->
+                optionsMenu
+            Speed ->
+                speedMenu
+            Difficulty ->
+                difficultyMenu
             EnterName ->
                 body [] []
             Won ->

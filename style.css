@@ -11,7 +11,7 @@
     -ms-user-select: none;       /* Internet Explorer/Edge */
     user-select: none;           /* Non-prefixed version, currently */
   }
-body { 
+body {
   background-color : #000;
 }
 #health {
@@ -117,20 +117,6 @@ img.rocket {
   background-image: url(texture/menubg.png);
   z-index: 1
 }
-#play {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  width: 460px;
-  height: 80px;
-  margin-top: -100px;
-  margin-left: -230px;
-  background-image: url(texture/playInactive.png);
-  z-index: 2
-}
-#play:hover {
-  background-image: url(texture/playActive.png)
-}
 a:link,
 a:visited,
 a:hover,
@@ -138,7 +124,17 @@ a:active {
   color: white;
   text-decoration: none;
 }
-#options {
+.first {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 460px;
+  height: 80px;
+  margin-top: -100px;
+  margin-left: -230px;
+  z-index: 2
+}
+.second{
   position: fixed;
   top: 50%;
   left: 50%;
@@ -146,13 +142,9 @@ a:active {
   height: 80px;
   margin-top: -10px;
   margin-left: -230px;
-  background-image: url(texture/optionsInactive.png);
   z-index: 2
 }
-#options:hover {
-  background-image: url(texture/optionsActive.png)
-}
-#credits {
+.third {
   position: fixed;
   top: 50%;
   left: 50%;
@@ -160,9 +152,60 @@ a:active {
   height: 80px;
   margin-top: 80px;
   margin-left: -230px;
-  background-image: url(texture/creditsInactive.png);
   z-index: 2
+}
+
+#play {
+  background-image: url(texture/playInactive.png);
+}
+#play:hover {
+  background-image: url(texture/playActive.png)
+}
+#options {
+  background-image: url(texture/optionsInactive.png);
+}
+#options:hover {
+  background-image: url(texture/optionsActive.png)
+}
+#credits {
+  background-image: url(texture/creditsInactive.png);
 }
 #credits:hover {
   background-image: url(texture/creditsActive.png)
+}
+#back {
+  background-image: url("texture/backInactive.png");
+}
+#back:hover {
+  background-image: url("texture/backActive.png");
+}
+#fast {
+  background-image: url("texture/fastInactive.png");
+}
+#fast:hover {
+  background-image: url("texture/fastActive.png");
+}
+#normal {
+  background-image: url("texture/normalInactive.png");
+}
+#normal:hover {
+  background-image: url("texture/normalActive.png");
+}
+#hard {
+  background-image: url("texture/hardInactive.png");
+}
+#hard:hover {
+  background-image: url("texture/hardActive.png");
+}
+#speed {
+  background-image: url("texture/speedInactive.png");
+}
+#speed:hover {
+  background-image: url("texture/speedActive.png");
+}
+#difficulty {
+  background-image: url("texture/difficultyInactive.png");
+}
+#difficulty:hover {
+  background-image: url("texture/difficultyActive.png");
 }
