@@ -1,10 +1,10 @@
 #### Roadmap items
-* [ ] Menu
-    - [ ] Start
-    - [ ] Options
-        - [ ] Game speed
-        - [ ] Difficulty
-    - [ ] Credits
+* [x] Menu
+    - [x] Start
+    - [x] Options
+        - [x] Game speed
+        - [x] Difficulty
+    - [x] Credits
     - [ ] Score
 * [ ] Automatic enemy generation
     - [ ] (optional) Waves!
