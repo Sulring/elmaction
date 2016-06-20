@@ -195,16 +195,19 @@ update action model =
 
         KeyChange (keyfunc,plus) ->
             ( { model | keys = keyfunc model.keys }, Cmd.none )
-
         MouseClicks pos ->
-            let
-                player = getPlayerActor model
-                attr = getCharacterAttributes model playerActor
-                renderPosition = (Math.Vector3.add player.renderPosition (vec3 0 1 0))
-                rotation = player.rotation
-            in
-                ( model, ( Cmd.batch [ (succeed (player.position, rotation)) |> Task.perform SoundError Fire
-                                      , (succeed "shot") |> Task.perform SoundError PlaySound ] ))
+            if model.status == Game
+                then
+                    let
+                        player = getPlayerActor model
+                        attr = getCharacterAttributes model playerActor
+                        renderPosition = (Math.Vector3.add player.renderPosition (vec3 0 1 0))
+                        rotation = player.rotation
+                    in
+                        ( model, ( Cmd.batch [ (succeed (player.position, rotation)) |> Task.perform SoundError Fire
+                                              , (succeed "shot") |> Task.perform SoundError PlaySound ] ))
+                else
+                    (model, Cmd.none)
         PlayMusic s ->
             (model, music s)
         AddScore i ->
@@ -1040,9 +1043,9 @@ mainMenu : Html Msg
 mainMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "play"] []
+            , div [id "play", onClick (ChangeStatus Game)] []
             , div [id "options"] []
-            , div [id "credits"] []
+            , div [id "credits", onClick (ChangeStatus Credits)] []
             ]
 credits : Html Msg
 credits =
@@ -1051,8 +1054,10 @@ credits =
                 , div [] [ text "programming - Ilya Bolotin"]
                 , div [] [ text "ui design - Ilya Bolotin"]
                 , div [] [ text "textures - Tatermand"]
-                , div [] [ text "music - Alexandr Zhelanov"]
-                , div [] [ text "sound - ProductionCrate (productioncrate.com)"]
+                , div [] [ text "music - "
+                         , a [ href "https://soundcloud.com/alexandr-zhelanov" ] [ text "Alexandr Zhelanov" ]]
+                , div [] [ text "sound - "
+                         , a [ href "http://productioncrate.com" ] [ text "ProductionCrate" ] ]
 
                 ]
             ]
