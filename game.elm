@@ -284,7 +284,9 @@ update action model =
         SetGameDifficulty i ->
             ({model | gameDifficulty = i}, Task.perform SoundError ChangeStatus (succeed Options))
         ExitButton ->
-            (model, Task.perform SoundError
+            ( if model.status == Won || model.status == GameOver
+                 then init
+                 else (model, Task.perform SoundError
                         ChangeStatus
                         (succeed (case model.status of
                                     MainMenu -> MainMenu
@@ -296,7 +298,7 @@ update action model =
                                     Highscore -> MainMenu
                                     EnterName -> EnterName
                                     Won -> MainMenu
-                                    GameOver -> MainMenu)))
+                                    GameOver -> MainMenu))))
 
 intList : Random.Generator (List Int)
 intList = Random.list 4 (Random.int -100 100 )
