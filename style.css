@@ -11,7 +11,7 @@
     -ms-user-select: none;       /* Internet Explorer/Edge */
     user-select: none;           /* Non-prefixed version, currently */
   }
-body {
+body { 
   background-color : #000;
 }
 #health {

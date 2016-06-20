@@ -357,12 +357,12 @@ affectActorPair (Collision c1, Collision c2) (source, target) =
 checkCollisions : String -> Actor -> Vec3 -> ActorManager -> ActorManager
 checkCollisions actorKey actor position am =
     let
-        collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1 + r2)/5 ) ^ 2  -- two circles collision
+        collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1 + r2)/3 ) ^ 2  -- two circles collision
         collisionFilter key a                                                             -- check if path is blocked
             =  case a.collision of
                     Nothing -> False
                     Just x -> let (Collision y) = x
-                              in y.blocking
+                              in y.blocking 
                               && log "Collides" (collide (log "Collide 1" actor.position) actor.size (log "Collide 2" a.position) a.size)    -- does it collide with first Actor?
 
         dict = Dict.remove actorKey am                                                    -- removing Actor from list (don't need to check collisions on self)
@@ -821,9 +821,16 @@ init =
 mouseClicks : Position -> Msg
 mouseClicks position = MouseClicks position
 
+keyPressed : Keyboard.KeyCode -> Msg
+keyPressed keyCode =
+    case keyCode of
+        case 27 -> ExitButton
+        case 13 -> SelectButton
+
 keyChange : Bool -> Keyboard.KeyCode -> Msg
 keyChange on keyCode =
     ((case keyCode of
+
         65 ->
             \k -> { k | left = on }
 
