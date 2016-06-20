@@ -1133,7 +1133,7 @@ view model =
       in
         case model.status of
             GameOver ->
-                body [] [ div [id "gameover"] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "gameover", onClick (ChangeStatus MainMenu)] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             MainMenu ->
                 mainMenu
             Credits ->
@@ -1145,9 +1145,9 @@ view model =
             Difficulty ->
                 difficultyMenu
             EnterName ->
-                body [] [ div [id "gameover"] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
-            Won ->
                 body [] []
+            Won ->
+                body [] [ div [id "gameover", onClick (ChangeStatus MainMenu)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
                 body [] []
             Game -> body []
