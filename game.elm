@@ -286,7 +286,11 @@ update action model =
             ({model | gameDifficulty = i}, Task.perform SoundError ChangeStatus (succeed Options))
         ExitButton ->
             ( if model.status == Won || model.status == GameOver
-                 then init
+                 then
+                     let newModel = fst init
+                     in ( { newModel | textures = model.textures
+                                    , wsize = model.wsize }
+                       , Cmd.none)
                  else (model, Task.perform SoundError
                         ChangeStatus
                         (succeed (case model.status of
@@ -1134,7 +1138,7 @@ view model =
       in
         case model.status of
             GameOver ->
-                body [] [ div [id "gameover", onClick (ChangeStatus MainMenu)] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "menuOverlay"] [], div [id "gameover", onClick (ChangeStatus MainMenu)] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             MainMenu ->
                 mainMenu
             Credits ->
@@ -1148,7 +1152,7 @@ view model =
             EnterName ->
                 body [] []
             Won ->
-                body [] [ div [id "gameover", onClick (ChangeStatus MainMenu)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "menuOverlay"] [], div [id "gameover", onClick (ChangeStatus MainMenu)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
                 body [] []
             Game -> body []
