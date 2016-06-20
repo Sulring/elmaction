@@ -162,6 +162,7 @@ a:active {
   font-size: 20;
   text-align: center;
   color: white;
+  font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
 }
 #gameover {
   width: 100%;
@@ -171,6 +172,7 @@ a:active {
   font-size: 40;
   text-align: center;
   color: white;
+  font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
 }
 #play {
   background-image: url(texture/playInactive.png);
