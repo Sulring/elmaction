@@ -11,4 +11,4 @@ WASD + Mouse
 See [Roadmap](https://github.com/Sulring/elmaction/blob/master/TODO.md)
 
 ##LICENSE
-[BD3](https://github.com/Sulring/elmaction/blob/master/LICENSE.md)
+[MIT](https://github.com/Sulring/elmaction/blob/master/LICENSE.md)
