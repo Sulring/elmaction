@@ -276,8 +276,9 @@ update action model =
                          , actorManager = Dict.insert slugname ( templateSlugActor model.gameSpeed ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
 
         ChangeStatus s ->
-            ({model | status = s}, Cmd.none)
-
+            if model.status == Won || model.status == GameOver
+                 then init
+                 else ({model | status = s}, Cmd.none)
         SetGameSpeed i ->
             ({model | gameSpeed = i}, Task.perform SoundError ChangeStatus (succeed Options))
 
