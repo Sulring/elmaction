@@ -161,6 +161,7 @@ a:active {
   margin-top: 20px;
   font-size: 20;
   text-align: center;
+  color: white;
 }
 #gameover {
   width: 100%;
@@ -169,6 +170,7 @@ a:active {
   margin-top: -40px;
   font-size: 40;
   text-align: center;
+  color: white;
 }
 #play {
   background-image: url(texture/playInactive.png);
