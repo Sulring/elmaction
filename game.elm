@@ -1133,7 +1133,7 @@ view model =
       in
         case model.status of
             GameOver ->
-                body [] [ div [] [text "GAMEOVER"], div [id "blood"] []]
+                body [] [ div [id "gameover"] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             MainMenu ->
                 mainMenu
             Credits ->
@@ -1145,14 +1145,14 @@ view model =
             Difficulty ->
                 difficultyMenu
             EnterName ->
-                body [] []
+                body [] [ div [id "gameover"] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Won ->
                 body [] []
             Highscore ->
                 body [] []
             Game ->
                 if model.status == Won
-                    then body [] [ div [] [text "CONGRATULATIONS!"]]
+                    then
                     else
                         body []
                       [ ( addActorsToScene model ) |> WebGL.toHtmlWith [ BlendFunc ( SrcAlphaSaturate , DstAlpha), Enable Blend ] [ width model.wsize.width, height model.wsize.height  ]

@@ -154,7 +154,22 @@ a:active {
   margin-left: -230px;
   z-index: 2
 }
-
+#gameoverDesc {
+  width: 100%;
+  position: fixed;
+  top: 50%;
+  margin-top: 20px;
+  font-size: 20;
+  text-align: center;
+}
+#gameover {
+  width: 100%;
+  position: fixed;
+  top: 50%;
+  margin-top: -40px;
+  font-size: 40;
+  text-align: center;
+}
 #play {
   background-image: url(texture/playInactive.png);
 }
