@@ -433,7 +433,7 @@ affectActorPairs key targetKeys am  =
 affectActorPair : (Collision, Collision) -> (Actor, Actor) -> (Actor, Actor)
 affectActorPair (Collision c1, Collision c2) (source, target) =
     let
-        collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1 + r2)/5 ) ^ 2
+        collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1 + r2)/3 ) ^ 2
         effect = collide source.position source.size target.position target.size
         a1 = if effect
                 then c2.effectOnTarget source
@@ -806,7 +806,7 @@ templateHealthActor gameSpeed i p  =
                                                             , rateOfFire = 600
                                                             , timeSinceLastFire = 0 }
                                , index= 6
-                               , size = 0.2
+                               , size = 0.1
                                , texture = "healthCrate"
                                , animation =      { name = "idle"
                                                   , current = 0
