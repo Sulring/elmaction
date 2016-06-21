@@ -61,9 +61,10 @@ body {
   font-weight: 400;
   color: white;
   text-decoration: none;
-  padding-top: 80px;
+  overflow: auto;
 }
 #creditsheader {
+  padding-top: 80px;
   font-weight: 900;
   paddin-bottom: 25px;
 }
@@ -174,6 +175,42 @@ a:active {
   color: white;
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
 }
+
+#nameForm {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 460px;
+  height: 80px;
+  margin-top: -100px;
+  margin-left: -230px;
+  z-index: 2;
+  text-align: center;
+  font-size: 30;
+  color: white;
+  border: 0;
+  background-color: transparent;
+  background-image: url(texture/form.png);
+  font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+}
+#nameButton {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 460px;
+  height: 80px;
+  margin-top: -10px;
+  margin-left: -230px;
+  z-index: 2;
+  background-color: transparent;
+  border: 0;
+  background-image: url(texture/startInactive.png);
+
+}
+#nameButton:hover {
+  background-image: url(texture/startActive.png);
+}
+
 #play {
   background-image: url(texture/playInactive.png);
 }

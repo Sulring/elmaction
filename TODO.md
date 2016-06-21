@@ -5,7 +5,7 @@
         - [x] Game speed
         - [x] Difficulty
     - [x] Credits
-    - [ ] Score
+    - [x] Score
 * [ ] Automatic enemy generation
     - [ ] (optional) Waves!
 * [ ] Secondary weapon (Rockets)
@@ -14,7 +14,7 @@
     * [ ] Rockets
 * [ ] Additional textures for enemies
 * [ ] Fix disappearing enemies bug
-* [ ] Fix enemies sti cking together on collision bug
+* [ ] Fix enemies sticking together on collision bug
 * [ ] Clean up the source code
 
 #### Optional items

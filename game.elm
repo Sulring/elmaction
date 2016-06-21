@@ -19,7 +19,9 @@ import Dict
 import Keyboard
 import Mouse exposing (Position)
 import Random
-
+import String
+import Json.Decode as Json exposing ((:=))
+import Http
 
 
 
@@ -50,6 +52,9 @@ type alias Model =
     , counter : Float
     , gameSpeed : Float
     , gameDifficulty : Bool
+    , playerName : String
+    , scoreList : Scores
+    , score : Int
     }
 
 
@@ -87,7 +92,7 @@ type Msg
     | KeyChange ((Keys -> Keys),(Maybe Bool))           -- marking pressed button
     | PlayMusic String                                  -- play music
     | PlaySound String                                  -- play sound clip
-    | Fire (Vec3,Mat4)
+    | Fire (Vec3,Mat4,Float)
     | MouseClicks Position
     | ChangeStatus Status
     | GetRandomDirectionVector Actor
@@ -98,10 +103,23 @@ type Msg
     | SetGameSpeed Float
     | SetGameDifficulty Bool
     | ExitButton
+    | SetName String
+    | SaveName
+    | FetchSucceed Scores
+    | FetchFail Http.Error
+    | FetchScoreBoard Int
 
 type Collision = Collision
     { blocking : Bool                                   -- collision type. True = Blocking / False = Overlapping
     , effectOnTarget : (Actor -> Actor)                 -- effects on collision for the target Actor
+    }
+type alias ScoreItem =
+    { name: String
+    , score: Int
+    }
+type alias Scores =
+    { scores: List ScoreItem
+    , date: String
     }
 
 type ActorType
@@ -199,7 +217,7 @@ update action model =
                     (model, Cmd.none)
 
         UpdateMouse pos ->
-            ( { model | mousePosition = pos, lookAt = (calculateDirection pos model.wsize) }, Cmd.none )
+            ( { model | mousePosition =  pos, lookAt = (calculateDirection pos model.wsize) }, Cmd.none )
 
         KeyChange (keyfunc,plus) ->
             ( { model | keys = keyfunc model.keys }, Cmd.none )
@@ -211,13 +229,30 @@ update action model =
                         attr = getCharacterAttributes model playerActor
                         renderPosition = (Math.Vector3.add player.renderPosition (vec3 0 1 0))
                         rotation = player.rotation
+                        animation = animateSprite True 1 Nothing player.texture player.animation
+                        newPlayer = { player | animation = animation }
+                        am = updateActorManagerDict playerActor newPlayer model.actorManager
                     in
-                        ( model, ( Cmd.batch [ (succeed (player.position, rotation)) |> Task.perform SoundError Fire
+                        ( { model | actorManager = am }, ( Cmd.batch [ (succeed (player.position, rotation, player.size)) |> Task.perform SoundError Fire
                                               , (succeed "shot") |> Task.perform SoundError PlaySound ] ))
                 else
                     (model, Cmd.none)
         PlayMusic s ->
             (model, music s)
+        SetName name ->
+            ({model | playerName = String.trim name }, Cmd.none)
+        SaveName ->
+            (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
+
+        FetchSucceed list ->
+                ({model | scoreList = list}, Task.perform SoundError ChangeStatus (succeed  Highscore )  )
+
+        FetchFail err ->
+            case err of
+                Http.Timeout -> (model, Task.perform SoundError ChangeStatus (succeed (log "I failed of timeout" Highscore)))
+                Http.NetworkError -> (model, Task.perform SoundError ChangeStatus (succeed (log "I failed of network error" Highscore)))
+                Http.UnexpectedPayload s -> (model, Task.perform SoundError ChangeStatus (succeed (log ("I faile of unexpected payload: " ++ s)  Highscore)))
+                Http.BadResponse i s -> (model, Task.perform SoundError ChangeStatus (succeed (log ("I faile of bad response: " ++ s ++ " - " ++ toString i)  Highscore)))
         AddScore i ->
             let
                 player = getPlayerActor model
@@ -227,7 +262,9 @@ update action model =
                                 updateActorManagerDict playerActor
                                     { player | characterAttributes
                                                 =  (Just { ca | score = ca.score + i}) }
-                                    model.actorManager}
+                                    model.actorManager
+                          , score = ca.score + i
+                  }
                 , if ca.score >= 300 then Task.perform SoundError ChangeStatus (succeed Won) else Cmd.none)
         GetRandomFireRate i ->
             (model, Random.generate RandomFireRate intList )
@@ -266,44 +303,49 @@ update action model =
 
         PlaySound s ->
             (model, sound s)
-        Fire (position,direction) ->
+        Fire (position,direction,size) ->
             let
+
                     slugint = model.last_i + 1
                     slugname = "slug-" ++ ( toString ( model.last_i + 1 ) )
-                    newPosition = Math.Vector3.add position  (transform direction (vec3 0 -0.3 0))
+                    newPosition = Math.Vector3.add position  (transform direction (vec3 -(size*0.057) -0.3 0))
+
             in
                 ({ model | last_i = model.last_i + 1
                          , actorManager = Dict.insert slugname ( templateSlugActor model.gameSpeed ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
 
         ChangeStatus s ->
-            if model.status == Won || model.status == GameOver
-                 then init
+            if s == MainMenu
+                 then
+                     let newModel = fst init
+                     in ( { newModel | textures = model.textures
+                                     , wsize = model.wsize
+                          }
+                        , Cmd.none)
                  else ({model | status = s}, Cmd.none)
         SetGameSpeed i ->
             ({model | gameSpeed = i}, Task.perform SoundError ChangeStatus (succeed Options))
 
         SetGameDifficulty i ->
             ({model | gameDifficulty = i}, Task.perform SoundError ChangeStatus (succeed Options))
+        FetchScoreBoard i ->
+            (model, Task.perform FetchFail FetchSucceed (Http.get decodeScoreBoard (scoreBoardUrl model)))
         ExitButton ->
-            ( if model.status == Won || model.status == GameOver
-                 then
-                     let newModel = fst init
-                     in ( { newModel | textures = model.textures
-                                    , wsize = model.wsize }
-                       , Cmd.none)
-                 else (model, Task.perform SoundError
-                        ChangeStatus
-                        (succeed (case model.status of
-                                    MainMenu -> MainMenu
-                                    Options -> MainMenu
-                                    Speed -> Options
-                                    Difficulty -> Options
-                                    Credits -> MainMenu
-                                    Game -> MainMenu
-                                    Highscore -> MainMenu
-                                    EnterName -> EnterName
-                                    Won -> MainMenu
-                                    GameOver -> MainMenu))))
+            case model.status of
+                Won -> (model, Task.perform SoundError FetchScoreBoard (succeed 1))
+                GameOver -> (model, Task.perform SoundError FetchScoreBoard (succeed 1))
+                Highscore-> (model, Task.perform SoundError ChangeStatus (succeed MainMenu))
+                Speed -> (model, Task.perform SoundError ChangeStatus (succeed Options))
+                Difficulty -> (model, Task.perform SoundError ChangeStatus (succeed Options))
+                _ -> (model, Task.perform SoundError ChangeStatus (succeed MainMenu))
+
+
+scoreBoardUrl : Model -> String
+scoreBoardUrl model =
+    "http://example.com/gamescore.php?name="
+           ++ model.playerName
+           ++ "&score="
+           ++ (toString model.score)
 
 intList : Random.Generator (List Int)
 intList = Random.list 4 (Random.int -100 100 )
@@ -398,7 +440,7 @@ checkCollisions actorKey actor position am =
                     Nothing -> False
                     Just x -> let (Collision y) = x
                               in y.blocking
-                              && log "Collides" (collide (log "Collide 1" actor.position) actor.size (log "Collide 2" a.position) a.size)    -- does it collide with first Actor?
+                              && collide actor.position actor.size a.position a.size    -- does it collide with first Actor?
 
         dict = Dict.remove actorKey am                                                    -- removing Actor from list (don't need to check collisions on self)
         dicts = Dict.partition collisionFilter dict                                       -- partitioning Dict into two Dicts: fst - blocking Actors, snd - overlapping Actor
@@ -453,7 +495,7 @@ updateActorManagerList dt model am amList =
                                     Just x -> x
                             checkedCharacterAttributes = getCA checkedActor
                             newCharacterAttributes = { checkedCharacterAttributes | timeSinceLastFire = checkedCharacterAttributes.timeSinceLastFire + ( floor dt ) }
-                            newActor = { actor | animation = animateSprite dt moving checkedActor.texture checkedActor.animation
+                            newActor = { actor | animation = animateSprite False (dt*(model.gameSpeed/10)) moving checkedActor.texture checkedActor.animation
                                                , timeToLive = if newCharacterAttributes.health <= 0 then Just 0 else checkedActor.timeToLive
                                                , characterAttributes = Just newCharacterAttributes
                                                , rotation = model.lookAt
@@ -475,7 +517,7 @@ updateActorManagerList dt model am amList =
 
                             (v,cmd) = ai actor model
 
-                            translationVector = case (log "MovesTo" actor.movesTo) of
+                            translationVector = case actor.movesTo of
                                 Nothing -> Math.Vector3.scale ((actor.speed * model.gameSpeed * dt) / 10000) (Math.Vector3.normalize (Math.Vector3.sub v actor.position))
                                 Just x -> Math.Vector3.scale ((actor.speed * model.gameSpeed * dt) / 10000) (Math.Vector3.normalize (Math.Vector3.sub x actor.position))
                             translation = makeTranslate translationVector
@@ -496,7 +538,7 @@ updateActorManagerList dt model am amList =
                                                  else (Just x,tPosition)
 
 
-                            renderPosition = log "RenderPosition" (transform worldTranslation (log "ActualPosition" tPosition))
+                            renderPosition = transform worldTranslation tPosition
 
 
 
@@ -518,7 +560,7 @@ updateActorManagerList dt model am amList =
                                     Nothing -> Nothing
                                     Just x -> if distance < 5 && x.rateOfFire <= x.timeSinceLastFire
                                                     then Just ( Cmd.batch [ cmd
-                                                                          , (succeed (checkedActor.position, checkedActor.rotation)) |> Task.perform SoundError Fire
+                                                                          , (succeed (checkedActor.position, checkedActor.rotation, checkedActor.size)) |> Task.perform SoundError Fire
                                                                           , (succeed "shot") |> Task.perform SoundError PlaySound
                                                                           ] )
                                                     else Nothing
@@ -529,8 +571,10 @@ updateActorManagerList dt model am amList =
                                     Nothing -> characterAttributes
                                     Just t -> Just { x | timeSinceLastFire = 0}
 
-
-                            newActor = { checkedActor | animation = animateSprite dt movesTo checkedActor.texture checkedActor.animation
+                            isShooting = case fireCommand of
+                                            Nothing -> False
+                                            _       -> True
+                            newActor = { checkedActor | animation = animateSprite isShooting (dt*(model.gameSpeed/10)) movesTo checkedActor.texture checkedActor.animation
                                                , timeToLive =
                                                    case checkedActor.characterAttributes of
                                                          Nothing -> checkedActor.timeToLive
@@ -631,7 +675,7 @@ templatePlayerActor name =     { key = name
                                                   }
                                , position = vec3 0 0 -4.99
                                , renderPosition = vec3 0 0 -4.99
-                               , spriteCentering = vec3 -0.03 -0.17 0
+                               , spriteCentering = vec3 -0.02 -0.17 0
                                , rotation = Math.Matrix4.identity
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , movesTo = Nothing
@@ -771,25 +815,28 @@ getAnimationDuration s =
         Nothing -> 0
         Just x -> x.duration
 
-animateSprite : Float -> Maybe Vec3 -> String -> SpriteAnimation -> SpriteAnimation
-animateSprite dtf moves key anim =
+animateSprite : Bool -> Float -> Maybe Vec3 -> String -> SpriteAnimation -> SpriteAnimation
+animateSprite shooting dtf moves key anim =
     let
-        new =
-            case moves of
-                Nothing -> "idle"
-                Just m -> "move"
+        new = if shooting
+                then
+                    "fire"
+                else
+                    case moves of
+                        Nothing -> "idle"
+                        Just m -> "move"
 
         dt = floor dtf
         a = anim
     in
-        if anim.name /= new
+        if anim.name == new || (anim.name == "fire" && anim.end < (anim.current + dt))
             then
+                { anim | current = (anim.current + dt) %  anim.end }
+            else
                 { name = new
                 , current = (anim.current + dt) % anim.end
                 , end = getAnimationDuration (key ++ "-" ++ new)
                 }
-            else
-                { anim | current = (anim.current + dt) %  anim.end }
 
 fetchTexture : ( String, String ) -> Task Error ( String, Texture )
 fetchTexture ( name, texture ) =
@@ -831,6 +878,17 @@ windowSize t =
 
 
 
+decodeScoreItem : Json.Decoder ScoreItem
+decodeScoreItem =
+    Json.object2 ScoreItem
+        ("name" := Json.string)
+        ("score" := Json.int)
+
+decodeScoreBoard : Json.Decoder Scores
+decodeScoreBoard =
+    Json.object2 Scores
+        ("scores" := Json.list decodeScoreItem)
+        ("date" := Json.string)
 
 init : ( Model, Cmd Msg )
 init =
@@ -845,6 +903,9 @@ init =
       , counter = 0
       , gameSpeed = 7
       , gameDifficulty = False
+      , playerName = "Player1"
+      , score = 0
+      , scoreList = {scores = [], date = ""}
       }
     , Cmd.batch
         [ Window.size |> windowSize
@@ -860,7 +921,7 @@ mouseClicks position = MouseClicks position
 
 keyPressed : Keyboard.KeyCode -> Msg
 keyPressed keyCode =
-    case (log "KEYCODE" keyCode) of
+    case keyCode of
         27 -> ExitButton
         _ -> (Basics.identity,Nothing) |> KeyChange
 
@@ -992,7 +1053,7 @@ animatedSprite actor =
 
         frame =
             let
-                frames = Dict.get (actor.key ++ "-" ++ anim.name) animationDict
+                frames = Dict.get (actor.texture ++ "-" ++ anim.name) animationDict
             in
                 case frames of
                     Nothing -> 0.0
@@ -1085,7 +1146,7 @@ mainMenu : Html Msg
 mainMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "play", class "first", onClick (ChangeStatus Game)] []
+            , div [id "play", class "first", onClick (ChangeStatus EnterName)] []
             , div [id "options", class "second", onClick (ChangeStatus Options)] []
             , div [id "credits", class "third", onClick (ChangeStatus Credits)] []
             ]
@@ -1125,11 +1186,22 @@ credits =
                 , div [] [ text "textures - Tatermand"]
                 , div [] [ text "music - "
                          , a [ href "https://soundcloud.com/alexandr-zhelanov" ] [ text "Alexandr Zhelanov" ]]
-                , div [] [ text "sound - "
+                , div [] [ text "sound effects - "
                          , a [ href "http://productioncrate.com" ] [ text "ProductionCrate" ] ]
 
                 ]
             ]
+
+
+highscore : Model -> Html Msg
+highscore model =
+    let
+        divMap s = div [] [ text (s.name ++ " - " ++ ( toString s.score )) ]
+    in
+        body [] [ div [id "creditlist", onClick (ChangeStatus MainMenu)]
+                    ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ (List.map divMap model.scoreList.scores))
+                ]
+
 
 view : Model -> Html Msg
 view model =
@@ -1138,7 +1210,7 @@ view model =
       in
         case model.status of
             GameOver ->
-                body [] [ div [id "menuOverlay"] [], div [id "gameover", onClick (ChangeStatus MainMenu)] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             MainMenu ->
                 mainMenu
             Credits ->
@@ -1150,11 +1222,12 @@ view model =
             Difficulty ->
                 difficultyMenu
             EnterName ->
-                body [] []
+                body [] [ input [placeholder "enter your name", id "nameForm", onInput SetName ] []
+                        , button [id "nameButton", onClick SaveName] []]
             Won ->
-                body [] [ div [id "menuOverlay"] [], div [id "gameover", onClick (ChangeStatus MainMenu)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
-                body [] []
+                highscore model
             Game -> body []
                       [ ( addActorsToScene model ) |> WebGL.toHtmlWith [ BlendFunc ( SrcAlphaSaturate , DstAlpha), Enable Blend ] [ width model.wsize.width, height model.wsize.height  ]
                       , img [src "texture/healthIcon.png", id "healthicon"] []
