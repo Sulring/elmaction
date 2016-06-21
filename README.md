@@ -3,7 +3,7 @@ A very simple top-down shooter game written in elm using [elm-webgl](https://git
 
 The goal is simple: kill waves of enemies and try not to die as long as you can.
 
-**[DEMO](http://sulring.github.io)**
+**[DEMO](http://sulring.github.io/elmion)**
 
 **Default controls:**
 WASD + Mouse
