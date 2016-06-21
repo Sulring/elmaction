@@ -80,6 +80,10 @@ type alias SpriteFrames =
 type alias AnimationDictionary =
     Dict.Dict String SpriteFrames
 
+type OnKilled = OnKilled
+    {  onKilled : Actor -> Cmd Msg
+    }
+
 type Msg
     = TexturesError Error
     | SoundError Error
@@ -108,6 +112,7 @@ type Msg
     | FetchSucceed Scores
     | FetchFail Http.Error
     | FetchScoreBoard Int
+    | GenerateDropCrate Vec3
 
 type Collision = Collision
     { blocking : Bool                                   -- collision type. True = Blocking / False = Overlapping
@@ -164,7 +169,7 @@ type alias Actor =
     , collision : Maybe Collision                       -- type of collisions of the Actor.
     , animation : SpriteAnimation                       -- Actor animations
     , affectsCamera : Maybe Mat4                        -- Player only : Camera transformation
-    , onKilled : Maybe ( Cmd Msg )                    -- fires Msg when killed
+    , onKilled : Maybe OnKilled                         -- fires Msg when killed
     , fireCommand : Maybe ( Cmd Msg )                   -- fires Msg
     }
 
@@ -313,7 +318,14 @@ update action model =
             in
                 ({ model | last_i = model.last_i + 1
                          , actorManager = Dict.insert slugname ( templateSlugActor model.gameSpeed ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
+        GenerateDropCrate position ->
+            let
 
+                    slugint = model.last_i + 1
+                    slugname = "health-" ++ ( toString ( model.last_i + 1 ) )
+            in
+                ({ model | last_i = model.last_i + 1
+                         , actorManager = Dict.insert slugname ( templateHealthActor model.gameSpeed ( slugint ) position ) model.actorManager }, Cmd.none)
         ChangeStatus s ->
             if s == MainMenu
                  then
@@ -639,7 +651,7 @@ fireCommandsAndkillActors am =
                     Just x -> if x == 0 then
                                             case actor.onKilled of
                                                 Nothing -> []
-                                                Just x -> [ x ]
+                                                Just (OnKilled x) -> [ x.onKilled actor ]
                                         else [] )
         filterKilled key actor =
             case actor.timeToLive of
@@ -684,9 +696,17 @@ templatePlayerActor name =     { key = name
                                , collision = Just ( Collision { blocking = True
                                                               , effectOnTarget = killBulletCollectable })
                                , affectsCamera = Nothing
-                               , onKilled = Just ( succeed GameOver |> Task.perform StatusError ChangeStatus )
+                               , onKilled = Just ( OnKilled { onKilled = gameOver} )
                                , fireCommand = Nothing
                                }
+
+gameOver : Actor -> Cmd Msg
+gameOver actor = succeed GameOver |> Task.perform StatusError ChangeStatus
+
+addScoreAndDropCrate : Actor -> Cmd Msg
+addScoreAndDropCrate actor =
+    Cmd.batch [ Task.perform SoundError AddScore (succeed 100)
+              , Task.perform SoundError GenerateDropCrate (succeed actor.position)]
 
 templateEnemyActor : Float ->String -> Vec3 -> Float -> Actor
 templateEnemyActor gameSpeed name p i  =     { key = name
@@ -717,7 +737,7 @@ templateEnemyActor gameSpeed name p i  =     { key = name
                                , collision = Just ( Collision { blocking = True
                                                               , effectOnTarget = killBulletCollectable })
                                , affectsCamera = Nothing
-                               , onKilled = Just (Task.perform SoundError AddScore (succeed 100))
+                               , onKilled = Just ( OnKilled { onKilled = addScoreAndDropCrate} )
                                , fireCommand = Nothing }
 
 killBulletCollectable: Actor -> Actor
@@ -769,6 +789,47 @@ templateSlugActor gameSpeed i p r  =
                                , timeToLive = Just (round (10000/gameSpeed))
                                , collision = Just (Collision { blocking = False
                                                              , effectOnTarget = bulletHit })
+                               , affectsCamera = Nothing
+                               , onKilled = Nothing
+                               , fireCommand = Nothing }
+templateHealthActor : Float -> Int -> Vec3 -> Actor
+templateHealthActor gameSpeed i p  =
+    let
+        name = toString i
+    in
+                               { key = "health-" ++ name
+                               , actorType = Object
+                               , actorSubType = Just Collectable
+                               , characterAttributes = Just { health = 100
+                                                            , rockets = 0
+                                                            , score = 0
+                                                            , rateOfFire = 600
+                                                            , timeSinceLastFire = 0 }
+                               , index= 6
+                               , size = 0.2
+                               , texture = "healthCrate"
+                               , animation =      { name = "idle"
+                                                  , current = 0
+                                                  , end = 100
+                                                  }
+                               , position = p
+                               , renderPosition = p
+                               , spriteCentering = vec3 0 0 0
+                               , rotation = Math.Matrix4.identity
+                               , worldTransformationMatrix = Math.Matrix4.identity
+                               , speed = 4
+                               , movesTo = Nothing
+                               , moves = False
+                               , timeToLive = Just (round (100000/gameSpeed))
+                               , collision = Just (Collision { blocking = False
+                                                             , effectOnTarget =
+                                                                    (\actor ->
+                                                                          (let
+                                                                               newCharacterAttributes = case actor.characterAttributes of
+                                                                                   Nothing -> Nothing
+                                                                                   Just x -> Just { x | health = Basics.clamp 0 (x.health + 100) 100 }
+                                                                           in
+                                                                               { actor | characterAttributes = newCharacterAttributes })) })
                                , affectsCamera = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
@@ -858,11 +919,12 @@ fetchTextures =
             , ( "grenadeCrate", "texture/grenadeCrate.png")
             , ( "healthCrate", "texture/healthCrate.png")
             , ( "slug", "texture/bullet.png")
+            , ( "healthCrate", "texture/healthCrate.png")
             ]
         )
 
 framedTextures : Dict.Dict String (Int,Bool)
-framedTextures = Dict.fromList [ ( "assault", (4, False) ), ( "ground", (10, True) ), ("slug", (1,False)) ]
+framedTextures = Dict.fromList [ ( "assault", (4, False) ), ( "ground", (10, True) ), ("slug", (1,False)), ("healthCrate", (1,False)) ]
 
 animationDict : AnimationDictionary
 animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ ( 1, 100 ) ] } )
@@ -870,6 +932,7 @@ animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ (
                               , ( "assault-fire", { duration = 300, frames = [ ( 1, 100 ) , ( 3, 50  ) , ( 2, 100 ) , (3, 50 ) ] } )
                               , ( "ground-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "slug-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
+                              , ( "healthCrate-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "slug-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )   ]
 
 windowSize : Task Error Window.Size -> Cmd Msg
