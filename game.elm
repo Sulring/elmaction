@@ -65,6 +65,7 @@ type alias Keys =
     , down : Bool
     , minus : Bool
     , plus : Bool
+    , shift : Bool
     }
 
 type alias SpriteAnimation =
@@ -96,7 +97,7 @@ type Msg
     | KeyChange ((Keys -> Keys),(Maybe Bool))           -- marking pressed button
     | PlayMusic String                                  -- play music
     | PlaySound String                                  -- play sound clip
-    | Fire (Vec3,Mat4,Float)
+    | Fire (Vec3,Mat4,Actor)
     | MouseClicks Position
     | ChangeStatus Status
     | GetRandomDirectionVector Actor
@@ -112,7 +113,8 @@ type Msg
     | FetchSucceed Scores
     | FetchFail Http.Error
     | FetchScoreBoard Int
-    | GenerateDropCrate Vec3
+    | GenerateDropCrate (Int,Vec3)
+    | Explosion Vec3
 
 type Collision = Collision
     { blocking : Bool                                   -- collision type. True = Blocking / False = Overlapping
@@ -158,6 +160,7 @@ type alias Actor =
     , size : Float                                      -- size of Actor
     , speed : Float
     , texture : String                                  -- texture
+    , randomVal : Int
     , position : Vec3                                   -- Actor position
     , renderPosition : Vec3                              -- Actor start position
     , spriteCentering : Vec3
@@ -238,7 +241,7 @@ update action model =
                         newPlayer = { player | animation = animation }
                         am = updateActorManagerDict playerActor newPlayer model.actorManager
                     in
-                        ( { model | actorManager = am }, ( Cmd.batch [ (succeed (player.position, rotation, player.size)) |> Task.perform SoundError Fire
+                        ( { model | actorManager = am }, ( Cmd.batch [ (succeed (player.position, rotation, player)) |> Task.perform SoundError Fire
                                               , (succeed "shot") |> Task.perform SoundError PlaySound ] ))
                 else
                     (model, Cmd.none)
@@ -276,25 +279,9 @@ update action model =
 
         RandomFireRate list ->
                 let
-                    update i xs m =
-                        case xs of
-                            (raf :: l) ->
-                                let newModel =
-                                    case Dict.get ( "Enemy" ++ ( toString i ) ) model.actorManager of
-                                        Nothing -> model
-                                        Just x -> {model | actorManager =
-
-                                                                    ( case (Dict.get ( "Enemy" ++ ( toString i ) ) model.actorManager) of
-                                                                        Nothing -> model.actorManager
-                                                                        Just a -> (updateActorManagerDict ( "Enemy" ++ ( toString i ) )
-                                                                                    (let ca = getCharacterAttributes model ( "Enemy" ++ ( toString i ) )
-                                                                                     in {a | characterAttributes = Just {ca | rateOfFire = raf }}  ) model.actorManager) )
-                                                  }
-                                in update ( i + 1 ) l newModel
-                            [] -> m
-                    newModel = update 1 list model
+                    actorManager = setRandoms (log "RANDOM" list) (Dict.keys model.actorManager) model.actorManager
                 in
-                    (model, Cmd.none)
+                    ( { model | actorManager = actorManager}, Cmd.none)
         GetRandomDirectionVector actor ->
             (model, Random.generate RandomDirectionVector (randomVectorForActor actor) )
         RandomDirectionVector (actor,dir) ->
@@ -308,24 +295,50 @@ update action model =
 
         PlaySound s ->
             (model, sound s)
-        Fire (position,direction,size) ->
+        Fire (position,direction,actor) ->
             let
-
+                    player = getPlayerActor model
+                    worldTranslation = makeTranslate <| vec3 -(Math.Vector3.getX player.position) -(Math.Vector3.getY player.position) 0
+                    mousePosition = vec3 (toFloat model.mousePosition.x) (toFloat model.mousePosition.y) -4.99
+                    target = transform worldTranslation mousePosition
+                    size = actor.size
                     slugint = model.last_i + 1
                     slugname = "slug-" ++ ( toString ( model.last_i + 1 ) )
                     newPosition = Math.Vector3.add position  (transform direction (vec3 -(size*0.057) -0.3 0))
 
             in
                 ({ model | last_i = model.last_i + 1
-                         , actorManager = Dict.insert slugname ( templateSlugActor model.gameSpeed ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
-        GenerateDropCrate position ->
+                         , actorManager = Dict.insert slugname ( if model.keys.shift == True && actor.actorType == Player
+                                                                    then templateRocketActor  model.gameSpeed ( slugint ) newPosition target direction
+                                                                    else templateSlugActor model.gameSpeed ( slugint ) newPosition direction ) model.actorManager }, Cmd.none)
+        Explosion position ->
+            let
+
+                collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1/3 + r2) ) ^ 2
+
+                checkActor s actor =
+                    if actor.actorType == NPC && collide actor.position actor.size position 1
+                        then { actor | timeToLive = Just 0 }
+                        else actor
+                newActorManager = Dict.map checkActor model.actorManager
+            in
+                ({ model | actorManager = newActorManager }, Cmd.none)
+
+        GenerateDropCrate (rand,position) ->
             let
 
                     slugint = model.last_i + 1
-                    slugname = "health-" ++ ( toString ( model.last_i + 1 ) )
+                    (slugname,am) = if rand < 50
+                        then
+                            ( "health-" ++ ( toString ( model.last_i + 1 ) )
+                            , Dict.insert slugname ( templateHealthActor model.gameSpeed ( slugint ) position ) model.actorManager)
+                        else
+                            ("rocketCrate-" ++ ( toString ( model.last_i + 1 ) )
+                            , Dict.insert slugname ( templateRocketCrateActor model.gameSpeed ( slugint ) position ) model.actorManager)
+
             in
                 ({ model | last_i = model.last_i + 1
-                         , actorManager = Dict.insert slugname ( templateHealthActor model.gameSpeed ( slugint ) position ) model.actorManager }, Cmd.none)
+                         , actorManager = am }, Cmd.none)
         ChangeStatus s ->
             if s == MainMenu
                  then
@@ -334,7 +347,11 @@ update action model =
                                      , wsize = model.wsize
                           }
                         , Cmd.none)
-                 else ({model | status = s}, Cmd.none)
+                 else if s== EnterName
+                        then
+                            ({model | status = s}, Task.perform SoundError GetRandomFireRate (succeed 1))
+                        else
+                            ({model | status = s}, Cmd.none)
         SetGameSpeed i ->
             ({model | gameSpeed = i}, Task.perform SoundError ChangeStatus (succeed Options))
 
@@ -351,6 +368,35 @@ update action model =
                 Difficulty -> (model, Task.perform SoundError ChangeStatus (succeed Options))
                 _ -> (model, Task.perform SoundError ChangeStatus (succeed MainMenu))
 
+
+setRandoms : List Int -> List String -> ActorManager -> ActorManager
+setRandoms xs enemies am =
+        case xs of
+            (i :: l) ->
+                case enemies of
+                    (enemy :: elist) ->
+                        case Dict.get (log "ENEMY" enemy) am of
+                            Nothing -> setRandoms xs elist am
+                            Just x ->
+                                if x.actorType == NPC
+                                    then
+                                        let
+                                            ca = case x.characterAttributes of
+                                                    Just y -> Just { y | rateOfFire = log ("RATEOF " ++x.key) (i*2 +   y.rateOfFire) }
+                                                    Nothing -> Nothing
+                                            newAm = updateActorManagerDict x.key
+                                                        { x | randomVal = clamp 0 (Basics.round (((toFloat i) + 100.0) / 2.0)) 100
+                                                            , characterAttributes = ca
+                                                        }
+                                                        am
+                                        in
+                                            setRandoms l elist newAm
+
+                                    else
+                                        setRandoms xs elist am
+                    [] -> am
+
+            [] -> am
 
 scoreBoardUrl : Model -> String
 scoreBoardUrl model =
@@ -572,7 +618,7 @@ updateActorManagerList dt model am amList =
                                     Nothing -> Nothing
                                     Just x -> if distance < 5 && x.rateOfFire <= x.timeSinceLastFire
                                                     then Just ( Cmd.batch [ cmd
-                                                                          , (succeed (checkedActor.position, checkedActor.rotation, checkedActor.size)) |> Task.perform SoundError Fire
+                                                                          , (succeed (checkedActor.position, checkedActor.rotation, checkedActor)) |> Task.perform SoundError Fire
                                                                           , (succeed "shot") |> Task.perform SoundError PlaySound
                                                                           ] )
                                                     else Nothing
@@ -680,6 +726,7 @@ templatePlayerActor name =     { key = name
                                , index= 7
                                , size = 0.35
                                , speed = 0.2
+                               , randomVal = 0
                                , texture = "assault"
                                , animation =      { name = "idle"
                                                   , current = 0
@@ -706,21 +753,25 @@ gameOver actor = succeed GameOver |> Task.perform StatusError ChangeStatus
 addScoreAndDropCrate : Actor -> Cmd Msg
 addScoreAndDropCrate actor =
     Cmd.batch [ Task.perform SoundError AddScore (succeed 100)
-              , Task.perform SoundError GenerateDropCrate (succeed actor.position)]
+              , Task.perform SoundError GenerateDropCrate (succeed (actor.randomVal, actor.position))]
 
-templateEnemyActor : Float ->String -> Vec3 -> Float -> Actor
-templateEnemyActor gameSpeed name p i  =     { key = name
+explode : Actor -> Cmd Msg
+explode actor = Task.perform SoundError Explosion (succeed actor.position)
+
+templateEnemyActor : Float ->String -> Vec3  -> Actor
+templateEnemyActor gameSpeed name p =     { key = name
                                , actorType = NPC
                                , actorSubType = Nothing
                                , characterAttributes = Just { health = 100
                                                             , rockets = 0
                                                             , score = 0
-                                                            , rateOfFire = round ((10*i)/gameSpeed)
+                                                            , rateOfFire = round (10000/gameSpeed)
                                                             , timeSinceLastFire = 0 }
                                      --, children = Children []
                                , index= 8
                                , size = 0.25
                                , speed = 0.8
+                               , randomVal = 0
                                , texture = "assault"
                                , animation =      { name = "idle"
                                                   , current = 0
@@ -774,6 +825,7 @@ templateSlugActor gameSpeed i p r  =
                                , index= 9
                                , size = 0.2
                                , texture = "slug"
+                               , randomVal = 0
                                , animation =      { name = "idle"
                                                   , current = 0
                                                   , end = 100
@@ -789,6 +841,41 @@ templateSlugActor gameSpeed i p r  =
                                , timeToLive = Just (round (10000/gameSpeed))
                                , collision = Just (Collision { blocking = False
                                                              , effectOnTarget = bulletHit })
+                               , affectsCamera = Nothing
+                               , onKilled = Nothing
+                               , fireCommand = Nothing }
+templateRocketActor : Float -> Int -> Vec3 -> Vec3 -> Mat4 -> Actor
+templateRocketActor gameSpeed i p t r  =
+    let
+        name = toString i
+    in
+                               { key = "slug-" ++ name
+                               , actorType = Object
+                               , actorSubType = Just Bullet
+                               , characterAttributes = Just { health = 100
+                                                            , rockets = 0
+                                                            , score = 0
+                                                            , rateOfFire = 600
+                                                            , timeSinceLastFire = 0 }
+                                     --, children = Children []
+                               , index= 9
+                               , size = 0.2
+                               , texture = "slug"
+                               , randomVal = 0
+                               , animation =      { name = "idle"
+                                                  , current = 0
+                                                  , end = 100
+                                                  }
+                               , position = p
+                               , renderPosition = p
+                               , spriteCentering = vec3 0 0 0
+                               , rotation = r
+                               , worldTransformationMatrix = Math.Matrix4.identity
+                               , speed = 3
+                               , movesTo = Just t
+                               , moves = False
+                               , timeToLive = Just (round (30000/gameSpeed))
+                               , collision = Nothing
                                , affectsCamera = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
@@ -808,6 +895,7 @@ templateHealthActor gameSpeed i p  =
                                , index= 6
                                , size = 0.1
                                , texture = "healthCrate"
+                               , randomVal = 0
                                , animation =      { name = "idle"
                                                   , current = 0
                                                   , end = 100
@@ -833,6 +921,49 @@ templateHealthActor gameSpeed i p  =
                                , affectsCamera = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
+templateRocketCrateActor : Float -> Int -> Vec3 -> Actor
+templateRocketCrateActor gameSpeed i p  =
+    let
+        name = toString i
+    in
+                               { key = "rocketCrate-" ++ name
+                               , actorType = Object
+                               , actorSubType = Just Collectable
+                               , characterAttributes = Just { health = 100
+                                                            , rockets = 0
+                                                            , score = 0
+                                                            , rateOfFire = 600
+                                                            , timeSinceLastFire = 0 }
+                               , index= 6
+                               , size = 0.1
+                               , texture = "rocketCrate"
+                               , randomVal = 0
+                               , animation =      { name = "idle"
+                                                  , current = 0
+                                                  , end = 100
+                                                  }
+                               , position = p
+                               , renderPosition = p
+                               , spriteCentering = vec3 0 0 0
+                               , rotation = Math.Matrix4.identity
+                               , worldTransformationMatrix = Math.Matrix4.identity
+                               , speed = 4
+                               , movesTo = Nothing
+                               , moves = False
+                               , timeToLive = Just (round (100000/gameSpeed))
+                               , collision = Just (Collision { blocking = False
+                                                             , effectOnTarget =
+                                                                    (\actor ->
+                                                                          (let
+                                                                               newCharacterAttributes = case actor.characterAttributes of
+                                                                                   Nothing -> Nothing
+                                                                                   Just x -> Just { x | rockets = Basics.clamp 0 (x.rockets + 1) 3 }
+                                                                           in
+                                                                               { actor | characterAttributes = newCharacterAttributes })) })
+                               , affectsCamera = Nothing
+                               , onKilled = Nothing
+                               , fireCommand = Nothing }
+
 templateGroundActor : Actor
 templateGroundActor =          { key = "ground"
                                , actorType = Object
@@ -841,6 +972,7 @@ templateGroundActor =          { key = "ground"
                                , index= 10
                                , size = 10
                                , texture = "ground"
+                               , randomVal = 0
                                , animation =      { name = "idle"
                                                   , current = 0
                                                   , end = 100
@@ -861,10 +993,10 @@ templateGroundActor =          { key = "ground"
 
 actorManager : ActorManager
 actorManager = Dict.fromList [ ("Player1", templatePlayerActor "Player1")
-                             , ("Enemy1", templateEnemyActor 10 "Enemy1" (vec3 2 2 -4.99) 1000)
-                             , ("Enemy2", templateEnemyActor 10 "Enemy2" (vec3 3 -2 -4.99) 800)
-                             , ("Enemy3", templateEnemyActor 10 "Enemy3" (vec3 -3 0 -4.99) 1200)
-                             , ("Enemy4", templateEnemyActor 10 "Enemy4" (vec3 -3 3 -4.99) 1100)
+                             , ("Enemy1", templateEnemyActor 10 "Enemy1" (vec3 2 2 -4.99))
+                             , ("Enemy2", templateEnemyActor 10 "Enemy2" (vec3 3 -2 -4.99))
+                             , ("Enemy3", templateEnemyActor 10 "Enemy3" (vec3 -3 0 -4.99))
+                             , ("Enemy4", templateEnemyActor 10 "Enemy4" (vec3 -3 3 -4.99))
                              , ("ground", templateGroundActor)
                              ]
 
@@ -913,18 +1045,17 @@ fetchTextures =
         (List.map fetchTexture
             [ ( "ground", "texture/ground512.png" )
             , ( "assault", "texture/acharacter.png")
-            , ( "grenade", "texture/iconGrenade.png")
-            , ( "grenadeActive", "texture/iconGrenadeActive.png")
-            , ( "healthIcon", "texture/healthIcon.png")
             , ( "grenadeCrate", "texture/grenadeCrate.png")
             , ( "healthCrate", "texture/healthCrate.png")
             , ( "slug", "texture/bullet.png")
+            , ( "rocket", "texture/bullet.png")
             , ( "healthCrate", "texture/healthCrate.png")
+            , ( "rocketCrate", "texture/grenadeCrate.png")
             ]
         )
 
 framedTextures : Dict.Dict String (Int,Bool)
-framedTextures = Dict.fromList [ ( "assault", (4, False) ), ( "ground", (10, True) ), ("slug", (1,False)), ("healthCrate", (1,False)) ]
+framedTextures = Dict.fromList [ ( "assault", (4, False) ), ( "ground", (10, True) ), ("slug", (1,False)), ("healthCrate", (1,False)), ("rocketCrate",(1,False)) ]
 
 animationDict : AnimationDictionary
 animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ ( 1, 100 ) ] } )
@@ -933,6 +1064,9 @@ animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ (
                               , ( "ground-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "slug-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "healthCrate-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
+                              , ( "rocketCrate-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
+                              , ( "rocket-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
+                              , ( "rocket-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "slug-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )   ]
 
 windowSize : Task Error Window.Size -> Cmd Msg
@@ -958,7 +1092,7 @@ init =
     ( { textures = Dict.empty
       , wsize = { width = 800, height = 800 }
       , mousePosition = { x = 0, y = 0 }
-      , keys = Keys False False False False False False
+      , keys = Keys False False False False False False False
       , lookAt = Math.Matrix4.identity
       , status = MainMenu
       , actorManager = actorManager
@@ -974,7 +1108,6 @@ init =
         [ Window.size |> windowSize
         , fetchTextures |> Task.perform TexturesError TexturesLoaded
         --, (succeed "") |> Task.perform SoundError PlayMusic
-        --, (succeed 10) |> Task.perform SoundError GetRandomFireRate
         ]
     )
 
@@ -1009,6 +1142,8 @@ keyChange on keyCode =
 
         107 ->
             \k -> {k | plus = on }
+        16 ->
+            \k -> {k | shift = on }
         _ ->
             Basics.identity
     ),
