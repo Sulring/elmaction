@@ -9,8 +9,8 @@
 * [ ] Automatic enemy generation
     - [ ] (optional) Waves!
 * [ ] Secondary weapon (Rockets)
-* [ ] Pickups
-    * [ ] Health
+* [x] Pickups
+    * [x] Health
     * [ ] Rockets
 * [ ] Additional textures for enemies
 * [ ] Fix disappearing enemies bug
