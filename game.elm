@@ -85,6 +85,9 @@ type alias AnimationDictionary =
 type OnKilled = OnKilled
     {  onKilled : Actor -> Cmd Msg
     }
+type OnDestination = OnDestination
+    { onDestination : Actor -> (Actor, List (Cmd Msg))
+    }
 
 type Msg
     = TexturesError Error
@@ -174,6 +177,7 @@ type alias Actor =
     , collision : Maybe Collision                       -- type of collisions of the Actor.
     , animation : SpriteAnimation                       -- Actor animations
     , affectsCamera : Maybe Mat4                        -- Player only : Camera transformation
+    , onDestination : Maybe OnDestination
     , onKilled : Maybe OnKilled                         -- fires Msg when killed
     , fireCommand : Maybe ( Cmd Msg )                   -- fires Msg
     }
@@ -243,8 +247,14 @@ update action model =
                         newPlayer = { player | animation = animation }
                         am = updateActorManagerDict playerActor newPlayer model.actorManager
                     in
-                        ( { model | actorManager = am }, ( Cmd.batch [ (succeed (player.position, rotation, player)) |> Task.perform SoundError Fire
-                                              , (succeed "shot") |> Task.perform SoundError PlaySound ] ))
+                        if model.keys.shift && attr.rockets > 0
+                            then ( { model | actorManager = am }, ( Cmd.batch [ (succeed (player.position, rotation, player)) |> Task.perform SoundError Fire
+                                                                              , (succeed "rocket") |> Task.perform SoundError PlaySound ] ))
+                            else if Basics.not model.keys.shift
+                                    then
+                                        ( { model | actorManager = am }, ( Cmd.batch [ (succeed (player.position, rotation, player)) |> Task.perform SoundError Fire
+                                                                                     , (succeed "shot") |> Task.perform SoundError PlaySound ] ))
+                                    else (model,Cmd.none)
                 else
                     (model, Cmd.none)
         PlayMusic s ->
@@ -336,11 +346,11 @@ update action model =
         Explosion position ->
             let
 
-                collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1/3 + r2) ) ^ 2
+                collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1/2 + r2) ) ^ 2
 
                 checkActor s actor =
-                    if actor.actorType == NPC && collide actor.position actor.size position 3
-                        then { actor | timeToLive = Just 0 }
+                    if actor.actorType == NPC && collide actor.position actor.size position 1
+                        then { actor | timeToLive = Just 200}
                         else  actor
                 newActorManager = Dict.map checkActor model.actorManager
             in
@@ -669,8 +679,14 @@ updateActorManagerList dt model am amList =
                             newActor = { checkedActor | animation = animateSprite isShooting (dt*(model.gameSpeed/10)) movesTo checkedActor.texture checkedActor.animation
                                                , timeToLive =
                                                    case checkedActor.characterAttributes of
-                                                         Nothing -> checkedActor.timeToLive
-                                                         Just x -> if x.health == 0 then Just 0 else checkedActor.timeToLive
+                                                         Nothing -> case checkedActor.timeToLive of
+                                                                        Nothing -> Nothing
+                                                                        Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
+                                                         Just a -> if a.health == 0
+                                                                        then Just 0
+                                                                        else case checkedActor.timeToLive of
+                                                                                Nothing -> Nothing
+                                                                                Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
                                                , rotation = lookAt
                                                , movesTo = movesTo
                                                , characterAttributes = newCharacterAttributes
@@ -706,17 +722,18 @@ updateActorManagerList dt model am amList =
                             worldTranslation = makeTranslate <| vec3 -(Math.Vector3.getX player.position) -(Math.Vector3.getY player.position) 0
                             renderPosition = transform worldTranslation tPosition
 
-                            animation = actor.animation
+                            (tActor,fireCommand) = if log "DESTIO" destination then case actor.onDestination of
+                                                                         Nothing -> (actor,[])
+                                                                         Just (OnDestination f) ->  f.onDestination actor
+                                                                  else (actor,[])
 
-                            newActor = { actor | animation = animation
-                                               , timeToLive = if destination
-                                                                 then Just 0
-                                                                 else
-                                                                     case actor.timeToLive of
-                                                                        Nothing -> Nothing
-                                                                        Just x -> Just ( Basics.max 0 (  x -  (floor dt ) ) )
-                                               , renderPosition =  renderPosition
-                                               , position =  tPosition
+                            newActor = { tActor | renderPosition =  renderPosition
+                                                , animation = animateSprite False (dt*(model.gameSpeed/10)) Nothing tActor.texture tActor.animation
+                                                , position =  tPosition
+                                                , timeToLive = case tActor.timeToLive of
+                                                                    Nothing -> Nothing
+                                                                    Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
+                                                , fireCommand = if List.isEmpty fireCommand then Nothing else Just (Cmd.batch fireCommand)
                                        }
                        in
                             updateActorManagerList dt model (updateActorManagerDict key newActor am)  list
@@ -790,6 +807,7 @@ templatePlayerActor name =     { key = name
                                                               , effectOnTarget = Basics.identity
                                                               , effectOnSelf = Basics.identity })
                                , affectsCamera = Nothing
+                               , onDestination = Nothing
                                , onKilled = Just ( OnKilled { onKilled = gameOver} )
                                , fireCommand = Nothing
                                }
@@ -802,8 +820,16 @@ addScoreAndDropCrate actor =
     Cmd.batch [ Task.perform SoundError AddScore (succeed 100)
               , Task.perform SoundError GenerateDropCrate (succeed (actor.randomVal,  actor.position))]
 
-explode : Actor -> Cmd Msg
-explode actor = Task.perform SoundError Explosion (succeed actor.position)
+explode : Actor -> (Actor,List (Cmd Msg))
+explode act = ( { act | timeToLive = Just 800
+                                          , texture = "explosion"
+                                          , animation = { name = "idle"
+                                                                , current = 0
+                                                                , end = 800}
+                                          , moves = False
+                                          , movesTo = Nothing
+                                          , size = 1.5}
+                                    , [Task.perform SoundError Explosion (succeed act.position), (succeed "explosion") |> Task.perform SoundError PlaySound] )
 
 templateEnemyActor : Float ->String -> Vec3  -> Actor
 templateEnemyActor gameSpeed name p =     { key = name
@@ -835,6 +861,7 @@ templateEnemyActor gameSpeed name p =     { key = name
                                                               , effectOnTarget = Basics.identity
                                                               , effectOnSelf = Basics.identity })
                                , affectsCamera = Nothing
+                               , onDestination = Nothing
                                , onKilled = Just ( OnKilled { onKilled = addScoreAndDropCrate} )
                                , fireCommand = Nothing }
 
@@ -893,6 +920,7 @@ templateSlugActor gameSpeed i p r  =
                                                              , effectOnTarget = bulletHit
                                                              , effectOnSelf = die })
                                , affectsCamera = Nothing
+                               , onDestination = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
 templateRocketActor : Float -> Int -> Vec3 -> Vec3 -> Mat4 -> Actor
@@ -910,8 +938,8 @@ templateRocketActor gameSpeed i p t r  =
                                                             , timeSinceLastFire = 0 }
                                      --, children = Children []
                                , index= 9
-                               , size = 0.2
-                               , texture = "slug"
+                               , size = 0.3
+                               , texture = "rocket"
                                , randomVal = 0
                                , animation =      { name = "idle"
                                                   , current = 0
@@ -928,6 +956,7 @@ templateRocketActor gameSpeed i p t r  =
                                , timeToLive = Just (round (30000/gameSpeed))
                                , collision = Nothing
                                , affectsCamera = Nothing
+                               , onDestination = Just ( OnDestination { onDestination = explode })
                                , onKilled = Nothing
                                , fireCommand = Nothing }
 templateHealthActor : Float -> Int -> Vec3 -> Actor
@@ -971,6 +1000,7 @@ templateHealthActor gameSpeed i p  =
                                                                            in
                                                                                { actor | characterAttributes = newCharacterAttributes })) })
                                , affectsCamera = Nothing
+                               , onDestination = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
 templateRocketCrateActor : Float -> Int -> Vec3 -> Actor
@@ -1014,6 +1044,7 @@ templateRocketCrateActor gameSpeed i p  =
                                                                            in
                                                                                { actor | characterAttributes = newCharacterAttributes })) })
                                , affectsCamera = Nothing
+                               , onDestination = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
 
@@ -1041,15 +1072,16 @@ templateGroundActor =          { key = "ground"
                                , timeToLive = Nothing
                                , collision = Nothing
                                , affectsCamera = Nothing
+                               , onDestination = Nothing
                                , onKilled = Nothing
                                , fireCommand = Nothing }
 
 actorManager : ActorManager
 actorManager = Dict.fromList [ ("Player1", templatePlayerActor "Player1")
-                        --     , ("Enemy1", templateEnemyActor 10 "Enemy1" (vec3 2 2 -4.99))
-                    --         , ("Enemy2", templateEnemyActor 10 "Enemy2" (vec3 3 -2 -4.99))
-                    --         , ("Enemy3", templateEnemyActor 10 "Enemy3" (vec3 -3 0 -4.99))
-                    --         , ("Enemy4", templateEnemyActor 10 "Enemy4" (vec3 -3 3 -4.99))
+                             , ("Enemy1", templateEnemyActor 10 "Enemy1" (vec3 2 2 -4.99))
+                             , ("Enemy2", templateEnemyActor 10 "Enemy2" (vec3 3 -2 -4.99))
+                             , ("Enemy3", templateEnemyActor 10 "Enemy3" (vec3 -3 0 -4.99))
+                             , ("Enemy4", templateEnemyActor 10 "Enemy4" (vec3 -3 3 -4.99))
                              , ("ground", templateGroundActor)
                              ]
 
@@ -1096,19 +1128,26 @@ fetchTextures : Task Error (List ( String, Texture ))
 fetchTextures =
     Task.sequence
         (List.map fetchTexture
-            [ ( "ground", "texture/grid.png" )
+            [ ( "ground", "texture/ground512.png" )
             , ( "assault", "texture/acharacter.png")
             , ( "grenadeCrate", "texture/grenadeCrate.png")
             , ( "healthCrate", "texture/healthCrate.png")
             , ( "slug", "texture/bullet.png")
-            , ( "rocket", "texture/bullet.png")
+            , ( "rocket", "texture/rocket.png")
             , ( "healthCrate", "texture/healthCrate.png")
             , ( "rocketCrate", "texture/grenadeCrate.png")
+            , ( "explosion", "texture/explosion.png")
             ]
         )
 
 framedTextures : Dict.Dict String (Int,Bool)
-framedTextures = Dict.fromList [ ( "assault", (4, False) ), ( "ground", (10, True) ), ("slug", (1,False)), ("healthCrate", (1,False)), ("rocketCrate",(1,False)) ]
+framedTextures = Dict.fromList [ ( "assault", (4, False) )
+                               , ( "ground", (10, True) )
+                               , ("slug", (1,False))
+                               , ("healthCrate", (1,False))
+                               , ("rocketCrate",(1,False))
+                               , ("rocket",(1,False))
+                               , ("explosion",(16,False)) ]
 
 animationDict : AnimationDictionary
 animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ ( 1, 100 ) ] } )
@@ -1120,6 +1159,10 @@ animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ (
                               , ( "rocketCrate-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "rocket-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "rocket-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )
+                              , ( "explosion-idle", {duration = 800, frames = [ ( 0, 50), ( 1, 50), ( 2, 50), ( 3, 50)
+                                                                               , ( 4, 50), ( 5, 50), ( 6, 50), ( 7, 50)
+                                                                               , ( 8, 50), ( 9, 50), ( 10, 50), ( 11, 50)
+                                                                               , ( 12, 50), ( 13, 50), ( 14, 50), ( 15, 50) ] } )
                               , ( "slug-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )   ]
 
 windowSize : Task Error Window.Size -> Cmd Msg
