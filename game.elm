@@ -37,6 +37,7 @@ type Status
     | Game                                               -- Game is running
     | GameOver                                           -- No Continues Left :)
     | Won
+    | Help
 
 type alias Textures =
     Dict.Dict String Texture
@@ -349,7 +350,7 @@ update action model =
                 collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1/2 + r2) ) ^ 2
 
                 checkActor s actor =
-                    if actor.actorType == NPC && collide actor.position actor.size position 0.5
+                    if actor.actorType == NPC && collide actor.position actor.size position 1
                         then { actor | timeToLive = Just 200}
                         else  actor
                 newActorManager = Dict.map checkActor model.actorManager
@@ -377,18 +378,26 @@ update action model =
                 ({ model | last_i = model.last_i + 1
                          , actorManager = am }, Cmd.none)
         ChangeStatus s ->
-            if s == MainMenu
-                 then
-                     let newModel = fst init
-                     in ( { newModel | textures = model.textures
+            case s of
+                MainMenu ->
+                    let
+                        newModel = fst init
+                    in
+                        ( { newModel | textures = model.textures
                                      , wsize = model.wsize
                           }
                         , Cmd.none)
-                 else if s== EnterName
-                        then
-                            ({model | status = s}, Task.perform SoundError GetRandomFireRate (succeed 1))
-                        else
-                            ({model | status = s}, Cmd.none)
+                EnterName ->
+                    ({model | status = s}, Task.perform SoundError GetRandomFireRate (succeed 1))
+                Game ->
+                    ({model | status = s}, Task.perform SoundError PlayMusic (succeed "actofwar"))
+                Won ->
+                    ({model | status = s}, Task.perform SoundError PlayMusic (succeed "intro"))
+                GameOver ->
+                    ({model | status = s}, Task.perform SoundError PlayMusic (succeed "intro"))
+
+                _ -> ({model | status = s}, Cmd.none)
+
         SetGameSpeed i ->
             ({model | gameSpeed = i}, Task.perform SoundError ChangeStatus (succeed Options))
 
@@ -397,7 +406,11 @@ update action model =
         FetchScoreBoard i ->
             (model, Task.perform FetchFail FetchSucceed (Http.get decodeScoreBoard (scoreBoardUrl model)))
         EnterButton ->
-            (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
+            if model.status == EnterName
+                then
+                    (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Help))
+                else
+                    (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
         ExitButton ->
             case model.status of
                 Won -> (model, Task.perform SoundError FetchScoreBoard (succeed 1))
@@ -1203,7 +1216,7 @@ init =
     , Cmd.batch
         [ Window.size |> windowSize
         , fetchTextures |> Task.perform TexturesError TexturesLoaded
-        --, (succeed "") |> Task.perform SoundError PlayMusic
+        , (succeed "intro") |> Task.perform SoundError PlayMusic
         ]
     )
 
@@ -1517,6 +1530,9 @@ view model =
                 speedMenu
             Difficulty ->
                 difficultyMenu
+            Help ->
+                body [] [ div [id "help", onClick EnterButton ] [] ]
+
             EnterName ->
                 body [] [ input [placeholder "enter your name", id "nameForm", onInput SetName ] []
                         , button [id "nameButton", onClick EnterButton] []]

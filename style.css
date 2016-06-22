@@ -83,6 +83,15 @@ body {
      opacity: 0;
 
 }
+#help {
+     position: fixed;
+     width: 100%;
+     height: 100%;
+     left: 0;
+     top: 0;
+     background-image: url("texture/help.png");
+     background-size:100% 100%;
+}
 img.rocket {
   position: fixed;
   bottom : 15px;
@@ -176,7 +185,9 @@ a:active {
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
 }
 
+
 #nameForm {
+  outline: none;
   position: fixed;
   top: 50%;
   left: 50%;
@@ -194,6 +205,7 @@ a:active {
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
 }
 #nameButton {
+  outline: none;
   position: fixed;
   top: 50%;
   left: 50%;
