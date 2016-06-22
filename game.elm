@@ -349,7 +349,7 @@ update action model =
                 collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1/2 + r2) ) ^ 2
 
                 checkActor s actor =
-                    if actor.actorType == NPC && collide actor.position actor.size position 1
+                    if actor.actorType == NPC && collide actor.position actor.size position 0.5
                         then { actor | timeToLive = Just 200}
                         else  actor
                 newActorManager = Dict.map checkActor model.actorManager
