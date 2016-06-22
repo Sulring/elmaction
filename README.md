@@ -6,7 +6,7 @@ The goal is simple: kill waves of enemies and try not to die as long as you can.
 **[DEMO](http://sulring.github.io/elmion)**
 
 **Default controls:**
-WASD + Mouse
+WASD + Mouse (Rockets = Shift + Left Click)
 
 ##TODO
 See [Roadmap](https://github.com/Sulring/elmaction/blob/master/TODO.md)
