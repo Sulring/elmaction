@@ -1553,7 +1553,9 @@ highscore model =
     in
         body [] [ div [id "menuOverlay"] []
                 , div [id "creditlist", onClick (ChangeStatus MainMenu)]
-                    ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ (List.map divMap model.scoreList.scores))
+                    ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ if List.isEmpty model.scoreList.scores 
+                                                                                then [div [] [ text "Can't connect to the scoreboard server!" ]]
+                                                                                else (List.map divMap model.scoreList.scores))
                 ]
 
 
