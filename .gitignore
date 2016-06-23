@@ -2,7 +2,7 @@
 elm-stuff/
 output/
 sound/
-game2.elm
+src/game2.elm
 # elm-repl generated files
 repl-temp-*
 
