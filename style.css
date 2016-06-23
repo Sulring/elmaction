@@ -62,6 +62,7 @@ body {
   color: white;
   text-decoration: none;
   overflow: auto;
+  z-index: 1;
 }
 #creditsheader {
   padding-top: 80px;
@@ -81,6 +82,7 @@ body {
      -moz-opacity: 0;
      -khtml-opacity: 0;
      opacity: 0;
+     z-index 30;
 
 }
 #help {
@@ -181,6 +183,7 @@ a:active {
   text-align: center;
   color: white;
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+  z-index: 3;
 }
 #gameover {
   width: 100%;
@@ -191,6 +194,7 @@ a:active {
   text-align: center;
   color: white;
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+  z-index: 3;
 }
 
 
@@ -211,6 +215,7 @@ a:active {
   background-color: transparent;
   background-image: url(texture/form.png);
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+  z-index: 3;
 }
 #nameButton {
   outline: none;
@@ -225,6 +230,7 @@ a:active {
   background-color: transparent;
   border: 0;
   background-image: url(texture/startInactive.png);
+  z-index: 3;
 
 }
 #nameButton:hover {

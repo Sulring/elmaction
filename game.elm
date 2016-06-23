@@ -1531,7 +1531,8 @@ difficultyMenu =
 
 credits : Html Msg
 credits =
-    body [] [ div [id "creditlist", onClick (ChangeStatus MainMenu)]
+    body [] [ div [id "menuOverlay"] []
+            , div [id "creditlist", onClick (ChangeStatus MainMenu)]
                 [ div [id "creditsheader"] [ text "CREDITS"]
                 , div [] [ text "programming - Ilya Bolotin"]
                 , div [] [ text "ui design - Ilya Bolotin"]
@@ -1550,7 +1551,8 @@ highscore model =
     let
         divMap s = div [] [ text (s.name ++ " - " ++ ( toString s.score )) ]
     in
-        body [] [ div [id "creditlist", onClick (ChangeStatus MainMenu)]
+        body [] [ div [id "menuOverlay"] []
+                , div [id "creditlist", onClick (ChangeStatus MainMenu)]
                     ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ (List.map divMap model.scoreList.scores))
                 ]
 
@@ -1574,13 +1576,15 @@ view model =
             Difficulty ->
                 difficultyMenu
             Help ->
-                body [] [ div [id "help", onClick EnterButton ] [] ]
+                body [] [ div [id "menuOverlay"] [], div [id "help", onClick EnterButton ] [] ]
 
             EnterName ->
-                body [] [ input [placeholder "enter your name", id "nameForm", onInput SetName ] []
+                body [] [ div [id "menuOverlay"] []
+                        , input [placeholder "enter your name", id "nameForm", onInput SetName ] []
                         , button [id "nameButton", onClick EnterButton, onMouseEnter (PlaySound "beep")] []]
             Won ->
-                body [] [ div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "menuOverlay"] []
+                        , div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
                 highscore model
             Game -> body []
