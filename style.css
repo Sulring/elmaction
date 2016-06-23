@@ -90,7 +90,10 @@ body {
      left: 0;
      top: 0;
      background-image: url("texture/help.png");
-     background-size:100% 100%;
+     background-repeat:no-repeat;
+     background-position: center center;
+     background-size:contain;
+
 }
 img.rocket {
   position: fixed;

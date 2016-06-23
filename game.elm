@@ -83,11 +83,11 @@ type alias SpriteFrames =
 type alias AnimationDictionary =
     Dict.Dict String SpriteFrames
 
-type OnKilled = OnKilled
-    {  onKilled : Actor -> Cmd Msg
+type OnActorKilled = OnActorKilled
+    {  onActorKilled : Actor -> Cmd Msg
     }
-type OnDestination = OnDestination
-    { onDestination : Actor -> (Actor, List (Cmd Msg))
+type OnAction = OnAction
+    { func : Actor -> (Actor, Maybe (Cmd Msg))
     }
 
 type Msg
@@ -178,8 +178,9 @@ type alias Actor =
     , collision : Maybe Collision                       -- type of collisions of the Actor.
     , animation : SpriteAnimation                       -- Actor animations
     , affectsCamera : Maybe Mat4                        -- Player only : Camera transformation
-    , onDestination : Maybe OnDestination
-    , onKilled : Maybe OnKilled                         -- fires Msg when killed
+    , onDeath : Maybe OnAction
+    , onDestination : Maybe OnAction
+    , onActorKilled : Maybe OnActorKilled                         -- fires Msg when killed
     , fireCommand : Maybe ( Cmd Msg )                   -- fires Msg
     }
 
@@ -386,17 +387,17 @@ update action model =
                         ( { newModel | textures = model.textures
                                      , wsize = model.wsize
                           }
-                        , Cmd.none)
+                        , Task.perform SoundError PlaySound (succeed "beep2"))
                 EnterName ->
-                    ({model | status = s}, Task.perform SoundError GetRandomFireRate (succeed 1))
+                    ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError GetRandomFireRate (succeed 1)])
                 Game ->
-                    ({model | status = s}, Task.perform SoundError PlayMusic (succeed "actofwar"))
+                    ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError PlayMusic (succeed "actofwar")])
                 Won ->
-                    ({model | status = s}, Task.perform SoundError PlayMusic (succeed "intro"))
+                    ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError PlayMusic (succeed "intro")])
                 GameOver ->
-                    ({model | status = s}, Task.perform SoundError PlayMusic (succeed "intro"))
+                    ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError PlayMusic (succeed "intro")])
 
-                _ -> ({model | status = s}, Cmd.none)
+                _ -> ({model | status = s}, Task.perform SoundError PlaySound (succeed "beep2"))
 
         SetGameSpeed i ->
             ({model | gameSpeed = i}, Task.perform SoundError ChangeStatus (succeed Options))
@@ -685,28 +686,45 @@ updateActorManagerList dt model am amList =
                                 Just x -> case fireCommand of
                                     Nothing -> characterAttributes
                                     Just t -> Just { x | timeSinceLastFire = 0}
-
                             isShooting = case fireCommand of
                                             Nothing -> False
                                             _       -> True
                             newActor = { checkedActor | animation = animateSprite isShooting (dt*(model.gameSpeed/10)) movesTo checkedActor.texture checkedActor.animation
-                                               , timeToLive =
-                                                   case checkedActor.characterAttributes of
-                                                         Nothing -> case checkedActor.timeToLive of
-                                                                        Nothing -> Nothing
-                                                                        Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
-                                                         Just a -> if a.health == 0
-                                                                        then Just 0
-                                                                        else case checkedActor.timeToLive of
-                                                                                Nothing -> Nothing
-                                                                                Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
-                                               , rotation = lookAt
-                                               , movesTo = movesTo
-                                               , characterAttributes = newCharacterAttributes
-                                               , fireCommand = fireCommand
+                                                      , rotation = lookAt
+                                                      , movesTo = movesTo
+                                                      , characterAttributes = newCharacterAttributes }
+
+                            (tActor, fireCommand2) =
+                                case newCharacterAttributes of
+                                    Nothing -> (newActor, Nothing)
+                                    Just x ->
+                                        if x.health<=0
+                                            then
+                                                case checkedActor.onDeath of
+                                                    Nothing -> (newActor, Nothing)
+                                                    Just (OnAction f) -> f.func newActor
+                                            else
+                                                (newActor, Nothing)
+                            cmds =
+                                case fireCommand of
+                                    Nothing ->
+                                        case fireCommand2 of
+                                            Nothing -> Nothing
+                                            _ ->  fireCommand2
+                                    Just x ->
+                                        case fireCommand2 of
+                                            Nothing -> fireCommand
+                                            Just k -> Just (Cmd.batch [k,x])
+
+                            outActor = { tActor | timeToLive =
+                                                    case tActor.timeToLive of
+                                                       Nothing -> Nothing
+                                                       Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
+
+                                                , fireCommand = cmds
                                      }
                         in
-                            updateActorManagerList dt model (updateActorManagerDict key newActor newAm) list
+                            updateActorManagerList dt model (updateActorManagerDict key outActor newAm) list
 
                     Object ->
                         let
@@ -736,9 +754,9 @@ updateActorManagerList dt model am amList =
                             renderPosition = transform worldTranslation tPosition
 
                             (tActor,fireCommand) = if log "DESTIO" destination then case actor.onDestination of
-                                                                         Nothing -> (actor,[])
-                                                                         Just (OnDestination f) ->  f.onDestination actor
-                                                                  else (actor,[])
+                                                                         Nothing -> (actor,Nothing)
+                                                                         Just (OnAction f) ->  f.func actor
+                                                                  else (actor,Nothing)
 
                             newActor = { tActor | renderPosition =  renderPosition
                                                 , animation = animateSprite False (dt*(model.gameSpeed/10)) Nothing tActor.texture tActor.animation
@@ -746,7 +764,7 @@ updateActorManagerList dt model am amList =
                                                 , timeToLive = case tActor.timeToLive of
                                                                     Nothing -> Nothing
                                                                     Just x -> Just (Basics.max 0 (x - (Basics.round dt)))
-                                                , fireCommand = if List.isEmpty fireCommand then Nothing else Just (Cmd.batch fireCommand)
+                                                , fireCommand = fireCommand
                                        }
                        in
                             updateActorManagerList dt model (updateActorManagerDict key newActor am)  list
@@ -764,23 +782,23 @@ updateActorManager dt model =
 fireCommandsAndkillActors : ActorManager -> ( ActorManager, Cmd Msg )
 fireCommandsAndkillActors am =
     let
-        getOnKilled (key, actor) =
+        getOnActorKilled (key, actor) =
                 ( case actor.fireCommand of
                     Nothing -> []
                     Just x -> [x] )
              ++ ( case actor.timeToLive of
                     Nothing -> []
                     Just x -> if x == 0 then
-                                            case actor.onKilled of
+                                            case actor.onActorKilled of
                                                 Nothing -> []
-                                                Just (OnKilled x) -> [ x.onKilled actor ]
+                                                Just (OnActorKilled x) -> [ x.onActorKilled actor ]
                                         else [] )
         filterKilled key actor =
             case actor.timeToLive of
                 Nothing -> True
                 Just x -> x /= 0
 
-        cmd = Cmd.batch ( List.concat (List.map getOnKilled ( Dict.toList am ) ) )
+        cmd = Cmd.batch ( List.concat (List.map getOnActorKilled ( Dict.toList am ) ) )
         newam = Dict.filter filterKilled am
 
     in
@@ -820,8 +838,9 @@ templatePlayerActor name =     { key = name
                                                               , effectOnTarget = Basics.identity
                                                               , effectOnSelf = Basics.identity })
                                , affectsCamera = Nothing
+                               , onDeath = Nothing
                                , onDestination = Nothing
-                               , onKilled = Just ( OnKilled { onKilled = gameOver} )
+                               , onActorKilled = Just ( OnActorKilled { onActorKilled = gameOver} )
                                , fireCommand = Nothing
                                }
 
@@ -833,7 +852,7 @@ addScoreAndDropCrate actor =
     Cmd.batch [ Task.perform SoundError AddScore (succeed 100)
               , Task.perform SoundError GenerateDropCrate (succeed (actor.randomVal,  actor.position))]
 
-explode : Actor -> (Actor,List (Cmd Msg))
+explode : Actor -> (Actor, Maybe(Cmd Msg))
 explode act = ( { act | timeToLive = Just 800
                                           , texture = "explosion"
                                           , animation = { name = "idle"
@@ -842,7 +861,19 @@ explode act = ( { act | timeToLive = Just 800
                                           , moves = False
                                           , movesTo = Nothing
                                           , size = 1.5}
-                                    , [Task.perform SoundError Explosion (succeed act.position), (succeed "explosion") |> Task.perform SoundError PlaySound] )
+                                    , Just (Cmd.batch [Task.perform SoundError Explosion (succeed act.position), (succeed "explosion") |> Task.perform SoundError PlaySound] ))
+
+death : Actor -> (Actor, Maybe (Cmd Msg))
+death act = ( { act |                       timeToLive = Just 400
+                                          , actorType = Object
+                                          , texture = "death"
+                                          , animation = { name = "idle"
+                                                                , current = 0
+                                                                , end = 400}
+                                          , moves = False
+                                          , movesTo = Nothing
+                                          , size = 0.2}
+                                    , Nothing )
 
 templateEnemyActor : Float ->String -> Vec3  -> Actor
 templateEnemyActor gameSpeed name p =     { key = name
@@ -874,8 +905,9 @@ templateEnemyActor gameSpeed name p =     { key = name
                                                               , effectOnTarget = Basics.identity
                                                               , effectOnSelf = Basics.identity })
                                , affectsCamera = Nothing
+                               , onDeath = Just (OnAction { func = death })
                                , onDestination = Nothing
-                               , onKilled = Just ( OnKilled { onKilled = addScoreAndDropCrate} )
+                               , onActorKilled = Just ( OnActorKilled { onActorKilled = addScoreAndDropCrate} )
                                , fireCommand = Nothing }
 
 killBulletCollectable: Actor -> Actor
@@ -933,8 +965,9 @@ templateSlugActor gameSpeed i p r  =
                                                              , effectOnTarget = bulletHit
                                                              , effectOnSelf = die })
                                , affectsCamera = Nothing
+                               , onDeath = Nothing
                                , onDestination = Nothing
-                               , onKilled = Nothing
+                               , onActorKilled = Nothing
                                , fireCommand = Nothing }
 templateRocketActor : Float -> Int -> Vec3 -> Vec3 -> Mat4 -> Actor
 templateRocketActor gameSpeed i p t r  =
@@ -969,8 +1002,9 @@ templateRocketActor gameSpeed i p t r  =
                                , timeToLive = Just (round (30000/gameSpeed))
                                , collision = Nothing
                                , affectsCamera = Nothing
-                               , onDestination = Just ( OnDestination { onDestination = explode })
-                               , onKilled = Nothing
+                               , onDeath = Nothing
+                               , onDestination = Just ( OnAction { func = explode })
+                               , onActorKilled = Nothing
                                , fireCommand = Nothing }
 templateHealthActor : Float -> Int -> Vec3 -> Actor
 templateHealthActor gameSpeed i p  =
@@ -1013,8 +1047,9 @@ templateHealthActor gameSpeed i p  =
                                                                            in
                                                                                { actor | characterAttributes = newCharacterAttributes })) })
                                , affectsCamera = Nothing
+                               , onDeath = Nothing
                                , onDestination = Nothing
-                               , onKilled = Nothing
+                               , onActorKilled = Nothing
                                , fireCommand = Nothing }
 templateRocketCrateActor : Float -> Int -> Vec3 -> Actor
 templateRocketCrateActor gameSpeed i p  =
@@ -1057,8 +1092,9 @@ templateRocketCrateActor gameSpeed i p  =
                                                                            in
                                                                                { actor | characterAttributes = newCharacterAttributes })) })
                                , affectsCamera = Nothing
+                               , onDeath = Nothing
                                , onDestination = Nothing
-                               , onKilled = Nothing
+                               , onActorKilled = Nothing
                                , fireCommand = Nothing }
 
 templateGroundActor : Actor
@@ -1085,8 +1121,9 @@ templateGroundActor =          { key = "ground"
                                , timeToLive = Nothing
                                , collision = Nothing
                                , affectsCamera = Nothing
+                               , onDeath = Nothing
                                , onDestination = Nothing
-                               , onKilled = Nothing
+                               , onActorKilled = Nothing
                                , fireCommand = Nothing }
 
 actorManager : ActorManager
@@ -1150,6 +1187,7 @@ fetchTextures =
             , ( "healthCrate", "texture/healthCrate.png")
             , ( "rocketCrate", "texture/grenadeCrate.png")
             , ( "explosion", "texture/explosion.png")
+            , ( "death", "texture/death.png")
             ]
         )
 
@@ -1160,7 +1198,8 @@ framedTextures = Dict.fromList [ ( "assault", (4, False) )
                                , ("healthCrate", (1,False))
                                , ("rocketCrate",(1,False))
                                , ("rocket",(1,False))
-                               , ("explosion",(16,False)) ]
+                               , ("explosion",(16,False))
+                               , ("death",(16,False)) ]
 
 animationDict : AnimationDictionary
 animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ ( 1, 100 ) ] } )
@@ -1172,10 +1211,14 @@ animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ (
                               , ( "rocketCrate-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "rocket-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "rocket-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )
-                              , ( "explosion-idle", {duration = 800, frames = [ ( 0, 50), ( 1, 50), ( 2, 50), ( 3, 50)
+                              , ( "explosion-idle", {duration = 800, frames =  [ ( 0, 50), ( 1, 50), ( 2, 50), ( 3, 50)
                                                                                , ( 4, 50), ( 5, 50), ( 6, 50), ( 7, 50)
                                                                                , ( 8, 50), ( 9, 50), ( 10, 50), ( 11, 50)
                                                                                , ( 12, 50), ( 13, 50), ( 14, 50), ( 15, 50) ] } )
+                             , ( "death-idle", {duration = 400, frames =     [ ( 0, 25), ( 1, 25), ( 2, 25), ( 3, 25)
+                                                                             , ( 4, 25), ( 5, 25), ( 6, 25), ( 7, 25)
+                                                                             , ( 8, 25), ( 9, 25), ( 10, 25), ( 11, 25)
+                                                                             , ( 12, 25), ( 13, 25), ( 14, 25), ( 15, 25) ] } )
                               , ( "slug-move",  { duration = 100, frames = [ ( 0, 100 ) ] } )   ]
 
 windowSize : Task Error Window.Size -> Cmd Msg
@@ -1455,35 +1498,35 @@ mainMenu : Html Msg
 mainMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "play", class "first", onClick (ChangeStatus EnterName)] []
-            , div [id "options", class "second", onClick (ChangeStatus Options)] []
-            , div [id "credits", class "third", onClick (ChangeStatus Credits)] []
+            , div [id "play", class "first", onClick (ChangeStatus EnterName), onMouseEnter (PlaySound "beep")] []
+            , div [id "options", class "second", onClick (ChangeStatus Options), onMouseEnter (PlaySound "beep")] []
+            , div [id "credits", class "third", onClick (ChangeStatus Credits), onMouseEnter (PlaySound "beep")] []
             ]
 optionsMenu : Html Msg
 optionsMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "difficulty", class "first", onClick (ChangeStatus Difficulty)] []
-            , div [id "speed", class "second", onClick (ChangeStatus Speed)] []
-            , div [id "back", class "third", onClick (ChangeStatus MainMenu)] []
+            , div [id "difficulty", class "first", onClick (ChangeStatus Difficulty), onMouseEnter (PlaySound "beep")] []
+            , div [id "speed", class "second", onClick (ChangeStatus Speed), onMouseEnter (PlaySound "beep")] []
+            , div [id "back", class "third", onClick (ChangeStatus MainMenu), onMouseEnter (PlaySound "beep")] []
             ]
 
 speedMenu : Html Msg
 speedMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "fast", class "first", onClick (SetGameSpeed 10)] []
-            , div [id "normal", class "second", onClick (SetGameSpeed 7)] []
-            , div [id "back", class "third", onClick (ChangeStatus Options)] []
+            , div [id "fast", class "first", onClick (SetGameSpeed 10), onMouseEnter (PlaySound "beep")] []
+            , div [id "normal", class "second", onClick (SetGameSpeed 7), onMouseEnter (PlaySound "beep")] []
+            , div [id "back", class "third", onClick (ChangeStatus Options), onMouseEnter (PlaySound "beep")] []
             ]
 
 difficultyMenu : Html Msg
 difficultyMenu =
     body [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
-            , div [id "hard", class "first", onClick (SetGameDifficulty True)] []
-            , div [id "normal", class "second", onClick (SetGameDifficulty False)] []
-            , div [id "back", class "third", onClick (ChangeStatus Options)] []
+            , div [id "hard", class "first", onClick (SetGameDifficulty True), onMouseEnter (PlaySound "beep")] []
+            , div [id "normal", class "second", onClick (SetGameDifficulty False), onMouseEnter (PlaySound "beep")] []
+            , div [id "back", class "third", onClick (ChangeStatus Options), onMouseEnter (PlaySound "beep")] []
             ]
 
 credits : Html Msg
@@ -1535,7 +1578,7 @@ view model =
 
             EnterName ->
                 body [] [ input [placeholder "enter your name", id "nameForm", onInput SetName ] []
-                        , button [id "nameButton", onClick EnterButton] []]
+                        , button [id "nameButton", onClick EnterButton, onMouseEnter (PlaySound "beep")] []]
             Won ->
                 body [] [ div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
