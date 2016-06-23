@@ -13,7 +13,6 @@
 * [x] Pickups
     * [x] Health
     * [x] Rockets
-
 * [ ] Additional textures for enemies
 * [ ] Fix disappearing enemies bug
 * [ ] Fix enemies sticking together on collision bug
