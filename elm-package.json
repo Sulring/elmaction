@@ -1,8 +1,8 @@
 {
-    "version": "0.1.0",
+    "version": "0.3.3",
     "summary": "elmaction",
     "repository": "https://github.com/Sulring/elmaction.git",
-    "license": "BSD3",
+    "license": "MIT",
     "source-directories": [
         "."
     ],
