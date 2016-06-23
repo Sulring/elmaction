@@ -8,10 +8,11 @@
     - [x] Score
 * [ ] Automatic enemy generation
     - [ ] (optional) Waves!
-* [ ] Secondary weapon (Rockets)
+* [x] Secondary weapon (Rockets)
 * [x] Pickups
     * [x] Health
-    * [ ] Rockets
+    * [x] Rockets
+* [x] Additional explosion animation
 * [ ] Additional textures for enemies
 * [ ] Fix disappearing enemies bug
 * [ ] Fix enemies sticking together on collision bug
