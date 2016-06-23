@@ -9,10 +9,11 @@
 * [ ] Automatic enemy generation
     - [ ] (optional) Waves!
 * [x] Secondary weapon (Rockets)
+    - [x] Explosion animation
 * [x] Pickups
     * [x] Health
     * [x] Rockets
-* [x] Additional explosion animation
+
 * [ ] Additional textures for enemies
 * [ ] Fix disappearing enemies bug
 * [ ] Fix enemies sticking together on collision bug
