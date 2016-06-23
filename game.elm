@@ -409,9 +409,9 @@ update action model =
         EnterButton ->
             if model.status == EnterName
                 then
-                    (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Help))
+                    (model, if String.isEmpty (log "STRING" model.playerName) then Cmd.none else Task.perform SoundError ChangeStatus (succeed Help))
                 else
-                    (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
+                    (model, if String.isEmpty (log "STRING"model.playerName) then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
         ExitButton ->
             case model.status of
                 Won -> (model, Task.perform SoundError FetchScoreBoard (succeed 1))
@@ -1252,7 +1252,7 @@ init =
       , counter = 0
       , gameSpeed = 7
       , gameDifficulty = False
-      , playerName = "Player1"
+      , playerName = ""
       , score = 0
       , scoreList = {scores = [], date = ""}
       }
