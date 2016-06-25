@@ -116,7 +116,6 @@ type Msg
     | EnterButton
     | SetName String
     | FetchSucceed Scores
-    | FetchFail Http.Error
     | FetchScore
     | GenerateDropCrate (Int,Vec3)
     | Explosion Vec3
@@ -264,14 +263,7 @@ update action model =
         SetName name ->
             ({model | playerName = String.trim name }, Cmd.none)
         FetchSucceed list ->
-                ({model | scoreList = list}, Task.perform SoundError ChangeStatus (succeed  Highscore )  )
-
-        FetchFail err ->
-            case err of
-                Http.Timeout -> (model, Task.perform SoundError ChangeStatus (succeed (log "I failed of timeout" Highscore)))
-                Http.NetworkError -> (model, Task.perform SoundError ChangeStatus (succeed (log "I failed of network error" Highscore)))
-                Http.UnexpectedPayload s -> (model, Task.perform SoundError ChangeStatus (succeed (log ("I faile of unexpected payload: " ++ s)  Highscore)))
-                Http.BadResponse i s -> (model, Task.perform SoundError ChangeStatus (succeed (log ("I faile of bad response: " ++ s ++ " - " ++ toString i)  Highscore)))
+            update (ChangeStatus Highscore) {model | scoreList = list}
         AddScore i ->
             let
                 player = getPlayerActor model
@@ -414,7 +406,7 @@ update action model =
             case model.status of
                 Won -> update FetchScore model
                 GameOver -> update FetchScore model
-                Highscore-> (model, Task.perform SoundError ChangeStatus (succeed MainMenu))
+                Highscore-> update (ChangeStatus MainMenu) model
                 Speed -> (model, Task.perform SoundError ChangeStatus (succeed Options))
                 Difficulty -> (model, Task.perform SoundError ChangeStatus (succeed Options))
                 _ -> (model, Task.perform SoundError ChangeStatus (succeed MainMenu))
