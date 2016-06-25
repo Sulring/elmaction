@@ -1,5 +1,5 @@
 @import url(https://fonts.googleapis.com/css?family=Orbitron:400,900);
-* {
+*:not(input) {
     margin:0;
     padding: 0;
     cursor:  auto;
@@ -84,6 +84,24 @@ body {
      opacity: 0;
      z-index 30;
 
+}
+#startCounter {
+  width: 100%;
+  position: fixed;
+  top: 50%;
+  margin-top: -40px;
+  font-size: 80;
+  text-align: center;
+  color: #b30000;
+  font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
+  z-index: 3;
+  -webkit-text-stroke: 1px black;
+  text-shadow:
+      3px 3px 0 #000,
+    -1px -1px 0 #000,
+     1px -1px 0 #000,
+     -1px 1px 0 #000,
+      1px 1px 0 #000;
 }
 #help {
      position: fixed;
@@ -215,7 +233,7 @@ a:active {
   background-color: transparent;
   background-image: url(texture/form.png);
   font-family: Orbitron, Tahoma, Trebuchet, Arial, Verdana;
-  z-index: 3;
+  z-index: 45;
 }
 #nameButton {
   outline: none;
@@ -230,7 +248,7 @@ a:active {
   background-color: transparent;
   border: 0;
   background-image: url(texture/startInactive.png);
-  z-index: 3;
+  z-index: 46;
 
 }
 #nameButton:hover {

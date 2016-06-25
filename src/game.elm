@@ -59,6 +59,7 @@ type alias Model =
     , scoreList : Scores
     , score : Int
     , waiting : Float
+    , startCounter : Float
     }
 
 
@@ -214,20 +215,30 @@ update action model =
         Animate dt ->
             if model.status == Game
                 then
+                    if model.startCounter > 0
+                      then
+                          let
+                            numerize f = Basics.round (f / 1000)
+                            changed = (numerize model.startCounter) /= (numerize (model.startCounter-dt))
+                          in
+                            if changed
+                                then update (PlaySound "beep2") {model | startCounter = model.startCounter - dt}
+                                else ({model | startCounter = model.startCounter - dt}, Cmd.none)
 
-                    let
-                        dirs = directions model.keys
+                      else
+                        let
+                            dirs = directions model.keys
 
-                        characterAttributes = getCharacterAttributes model playerActor
+                            characterAttributes = getCharacterAttributes model playerActor
 
-                        actorManager = updateActorManager dt model
-                        actorsAlive = fireCommandsAndkillActors actorManager
-                        counter = model.counter + 1
-                        last_i = if counter > 5000 then 1 else model.last_i
-                    in
-                        ( { model | actorManager = fst actorsAlive
-                                  , counter = counter
-                                  , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
+                            actorManager = updateActorManager dt model
+                            actorsAlive = fireCommandsAndkillActors actorManager
+                            counter = model.counter + 1
+                            last_i = if counter > 5000 then 1 else model.last_i
+                        in
+                            ( { model | actorManager = fst actorsAlive
+                                      , counter = counter
+                                      , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
                 else
                     if model.status == WaitingForHighscore
                         then
@@ -267,7 +278,7 @@ update action model =
         PlayMusic s ->
             (model, music s)
         FetchScore ->
-            (model, getScoreBoard (model.playerName,model.score))
+            ({ model | status = WaitingForHighscore }, getScoreBoard (model.playerName,model.score))
         SetName name ->
             ({model | playerName = String.trim name }, Cmd.none)
         FetchSucceed list ->
@@ -276,15 +287,17 @@ update action model =
             let
                 player = getPlayerActor model
                 ca = getCharacterAttributes  model playerActor
-            in
-                ( { model | actorManager =
-                                updateActorManagerDict playerActor
-                                    { player | characterAttributes
-                                                =  (Just { ca | score = ca.score + i}) }
-                                    model.actorManager
-                          , score = ca.score + i
-                  }
-                , if ca.score >= 300 then Task.perform SoundError ChangeStatus (succeed Won) else Cmd.none)
+
+                newModel = { model | actorManager =
+                                        updateActorManagerDict playerActor
+                                            { player | characterAttributes
+                                                     =  (Just { ca | score = ca.score + i}) }
+                                            model.actorManager
+                                   , score = ca.score + i
+                            }
+            in if ca.score >= 300
+                    then update  (ChangeStatus Won) newModel
+                    else (newModel,Cmd.none)
         GetRandomFireRate i ->
             (model, Random.generate RandomFireRate intList )
 
@@ -384,10 +397,10 @@ update action model =
                     let
                         newModel = fst init
                     in
-                        ( { newModel | textures = model.textures
-                                     , wsize = model.wsize
-                          }
-                        , Task.perform SoundError PlaySound (succeed "beep2"))
+                        update (PlaySound "beep2")
+                            { newModel | textures = model.textures
+                                       , wsize = model.wsize
+                            }
                 EnterName ->
                     ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError GetRandomFireRate (succeed 1)])
                 Game ->
@@ -1240,6 +1253,7 @@ init =
       , score = 0
       , scoreList = []
       , waiting = 0
+      , startCounter = 4999
       }
     , Cmd.batch
         [ Window.size |> windowSize
@@ -1347,16 +1361,14 @@ port scoreBoard : (Scores -> msg) -> Sub msg
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    [
-      scoreBoard FetchSucceed
-    , AnimationFrame.diffs Animate
+    [ AnimationFrame.diffs Animate
     , Keyboard.downs (keyChange True)
     , Keyboard.ups (keyChange False)
     , Keyboard.downs keyPressed
     , Mouse.clicks(mouseClicks)
     , Window.resizes WindowSizeSuccess
     , Mouse.moves (\{ x, y } -> UpdateMouse { x = x, y = y })
-
+    , scoreBoard FetchSucceed
     ]
         |> Sub.batch
 
@@ -1486,7 +1498,7 @@ addActorsToScene model =
 
 mainMenu : Html Msg
 mainMenu =
-    body [] [ div [id "menuOverlay"] []
+    div [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
             , div [id "play", class "first", onClick (ChangeStatus EnterName), onMouseEnter (PlaySound "beep")] []
             , div [id "options", class "second", onClick (ChangeStatus Options), onMouseEnter (PlaySound "beep")] []
@@ -1494,7 +1506,7 @@ mainMenu =
             ]
 optionsMenu : Html Msg
 optionsMenu =
-    body [] [ div [id "menuOverlay"] []
+    div [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
             , div [id "difficulty", class "first", onClick (ChangeStatus Difficulty), onMouseEnter (PlaySound "beep")] []
             , div [id "speed", class "second", onClick (ChangeStatus Speed), onMouseEnter (PlaySound "beep")] []
@@ -1503,7 +1515,7 @@ optionsMenu =
 
 speedMenu : Html Msg
 speedMenu =
-    body [] [ div [id "menuOverlay"] []
+    div [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
             , div [id "fast", class "first", onClick (SetGameSpeed 10), onMouseEnter (PlaySound "beep")] []
             , div [id "normal", class "second", onClick (SetGameSpeed 7), onMouseEnter (PlaySound "beep")] []
@@ -1512,7 +1524,7 @@ speedMenu =
 
 difficultyMenu : Html Msg
 difficultyMenu =
-    body [] [ div [id "menuOverlay"] []
+    div [] [ div [id "menuOverlay"] []
             , div [id "menuBg"] []
             , div [id "hard", class "first", onClick (SetGameDifficulty True), onMouseEnter (PlaySound "beep")] []
             , div [id "normal", class "second", onClick (SetGameDifficulty False), onMouseEnter (PlaySound "beep")] []
@@ -1521,7 +1533,7 @@ difficultyMenu =
 
 credits : Html Msg
 credits =
-    body [] [ div [id "menuOverlay"] []
+    div [] [ div [id "menuOverlay"] []
             , div [id "creditlist", onClick (ChangeStatus MainMenu)]
                 [ div [id "creditsheader"] [ text "CREDITS"]
                 , div [] [ text "programming - Ilya Bolotin"]
@@ -1541,12 +1553,35 @@ highscore model =
     let
         divMap s = div [] [ text (fst s ++ " - " ++ ( toString (snd s) )) ]
     in
-        body [] [ div [id "menuOverlay"] []
+        div [] [ div [id "menuOverlay"] []
                 , div [id "creditlist", onClick (ChangeStatus MainMenu)]
                     ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ if List.isEmpty model.scoreList
                                                                                 then [div [] [ text "Can't connect to the scoreboard server!" ]]
                                                                                 else (List.map divMap model.scoreList))
                 ]
+
+
+game : Model -> Html Msg
+game model =
+    let
+      player = getCharacterAttributes model playerActor
+    in
+             div []   ([ ( addActorsToScene model ) |> WebGL.toHtmlWith [ BlendFunc ( SrcAlphaSaturate , DstAlpha), Enable Blend ] [ width model.wsize.width, height model.wsize.height  ]
+                      , img [src "texture/healthIcon.png", id "healthicon"] []
+                      , div [id "health"] [text (toString player.health)]
+                      , div [id "score"] [text (toString player.score)]
+                      , div [id "blood"] []
+                      , img [src (if player.rockets > 0 then "texture/iconGrenadeActive.png" else "texture/iconGrenade.png"), class "rocket", id "rocket1"] []
+                      , img [src (if player.rockets > 1 then "texture/iconGrenadeActive.png" else "texture/iconGrenade.png"), class "rocket", id "rocket2"] []
+                      , img [src (if player.rockets > 2 then "texture/iconGrenadeActive.png" else "texture/iconGrenade.png"), class "rocket", id "rocket3"] []
+                      ] ++ (if model.startCounter > 0
+                                then
+                                    let c = Basics.floor(model.startCounter / 1000)
+                                    in
+                                        if c == 0
+                                            then [div [id "startCounter"] [ text "GO!" ]]
+                                            else [div [id "startCounter"] [ text (Basics.toString c) ]]
+                                else []))
 
 
 view : Model -> Html Msg
@@ -1556,7 +1591,7 @@ view model =
       in
         case model.status of
             GameOver ->
-                body [] [ div [id "menuOverlay", onClick FetchScore] [], div [id "gameover", onClick FetchScore] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                 div [] [div [id "menuOverlay", onClick FetchScore] [], div [id "gameover", onClick FetchScore] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             MainMenu ->
                 mainMenu
             Credits ->
@@ -1568,32 +1603,22 @@ view model =
             Difficulty ->
                 difficultyMenu
             Help ->
-                body [] [ div [id "menuOverlay"] [], div [id "help", onClick EnterButton ] [] ]
+                div [] [ div [id "menuOverlay"] [], div [id "help", onClick EnterButton ] [] ]
 
             EnterName ->
-                body [] [ div [id "menuOverlay"] []
+                div [] [ div [id "menuOverlay"] []
                         , input [placeholder "enter your name", id "nameForm", onInput SetName ] []
                         , button [id "nameButton", onClick EnterButton, onMouseEnter (PlaySound "beep")] []]
             Won ->
-                body [] [ div [id "menuOverlay"] []
+                div [] [ div [id "menuOverlay"] []
                         , div [id "menuOverlay", onClick FetchScore] [], div [id "gameover", onClick FetchScore] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
                 highscore model
             WaitingForHighscore ->
-                body [] [ div [id "menuOverlay"] []
+                div [] [ div [id "menuOverlay"] []
                         , div [id "gameoverDesc"] [text "Retrieving High Scores"]]
-            Game -> body []
-                      [ ( addActorsToScene model ) |> WebGL.toHtmlWith [ BlendFunc ( SrcAlphaSaturate , DstAlpha), Enable Blend ] [ width model.wsize.width, height model.wsize.height  ]
-                      , img [src "texture/healthIcon.png", id "healthicon"] []
-                      , div [id "health"] [text (toString player.health)]
-                      , div [id "score"] [text (toString player.score)]
-                      , div [id "blood"] []
-                      , img [src (if player.rockets > 0 then "texture/iconGrenadeActive.png" else "texture/iconGrenade.png"), class "rocket", id "rocket1"] []
-                      , img [src (if player.rockets > 1 then "texture/iconGrenadeActive.png" else "texture/iconGrenade.png"), class "rocket", id "rocket2"] []
-                      , img [src (if player.rockets > 2 then "texture/iconGrenadeActive.png" else "texture/iconGrenade.png"), class "rocket", id "rocket3"] []
-                      ]
-
-
+            Game ->
+                game model
 
 
 -- SHADERS
