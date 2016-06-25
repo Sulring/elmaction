@@ -51,7 +51,7 @@
       "name" : player[0],
       "score" : player[1]
     });
-    scoresRef.orderByChild("score").limitToLast(30).on('value', function(snap) {
+    scoresRef.orderByChild("score").limitToLast(30).once('value', function(snap) {
        snap.forEach(function(data) {
          var score = [data.val().name,data.val().score];
          scores.push(score);
