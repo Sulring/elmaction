@@ -34,6 +34,7 @@ type Status
     | Difficulty
     | EnterName                                          -- Entering Player name
     | Highscore                                          -- showing Highscores
+    | WaitingForHighscore
     | Game                                               -- Game is running
     | GameOver                                           -- No Continues Left :)
     | Won
@@ -57,6 +58,7 @@ type alias Model =
     , playerName : String
     , scoreList : Scores
     , score : Int
+    , waiting : Float
     }
 
 
@@ -227,7 +229,13 @@ update action model =
                                   , counter = counter
                                   , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
                 else
-                    (model, Cmd.none)
+                    if model.status == WaitingForHighscore
+                        then
+                            if List.isEmpty model.scoreList && model.waiting < 5000
+                                then ({model | waiting = model.waiting + dt}, Cmd.none)
+                                else update (ChangeStatus Highscore) { model | waiting = 0 }
+                        else
+                            (model, Cmd.none)
 
         UpdateMouse pos ->
             ( { model | mousePosition =  pos, lookAt = (calculateDirection pos model.wsize) }, Cmd.none )
@@ -263,7 +271,7 @@ update action model =
         SetName name ->
             ({model | playerName = String.trim name }, Cmd.none)
         FetchSucceed list ->
-            update (ChangeStatus Highscore) {model | scoreList = list}
+            update (ChangeStatus WaitingForHighscore) {model | scoreList = list}
         AddScore i ->
             let
                 player = getPlayerActor model
@@ -1231,6 +1239,7 @@ init =
       , playerName = ""
       , score = 0
       , scoreList = []
+      , waiting = 0
       }
     , Cmd.batch
         [ Window.size |> windowSize
@@ -1568,6 +1577,9 @@ view model =
                         , div [id "menuOverlay", onClick FetchScore] [], div [id "gameover", onClick FetchScore] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
                 highscore model
+            WaitingForHighscore ->
+                body [] [ div [id "menuOverlay"] []
+                        , div [id "gameoverDesc"] [text "Retrieving High Scores"]]
             Game -> body []
                       [ ( addActorsToScene model ) |> WebGL.toHtmlWith [ BlendFunc ( SrcAlphaSaturate , DstAlpha), Enable Blend ] [ width model.wsize.width, height model.wsize.height  ]
                       , img [src "texture/healthIcon.png", id "healthicon"] []
