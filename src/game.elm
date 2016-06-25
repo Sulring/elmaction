@@ -231,7 +231,7 @@ update action model =
                 else
                     if model.status == WaitingForHighscore
                         then
-                            if List.isEmpty model.scoreList && model.waiting < 5000
+                            if List.isEmpty (log "LIST" model.scoreList) && model.waiting < 5000
                                 then ({model | waiting = model.waiting + dt}, Cmd.none)
                                 else update (ChangeStatus Highscore) { model | waiting = 0 }
                         else
@@ -271,7 +271,7 @@ update action model =
         SetName name ->
             ({model | playerName = String.trim name }, Cmd.none)
         FetchSucceed list ->
-            update (ChangeStatus WaitingForHighscore) {model | scoreList = list}
+            update (ChangeStatus WaitingForHighscore) {model | scoreList = log "LIST>" list}
         AddScore i ->
             let
                 player = getPlayerActor model
@@ -1347,14 +1347,16 @@ port scoreBoard : (Scores -> msg) -> Sub msg
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    [ AnimationFrame.diffs Animate
+    [
+      scoreBoard FetchSucceed
+    , AnimationFrame.diffs Animate
     , Keyboard.downs (keyChange True)
     , Keyboard.ups (keyChange False)
     , Keyboard.downs keyPressed
     , Mouse.clicks(mouseClicks)
     , Window.resizes WindowSizeSuccess
     , Mouse.moves (\{ x, y } -> UpdateMouse { x = x, y = y })
-    , scoreBoard FetchSucceed
+
     ]
         |> Sub.batch
 

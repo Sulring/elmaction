@@ -56,8 +56,8 @@
          var score = [data.val().name,data.val().score];
          scores.push(score);
        });
+       app.ports.scoreBoard.send(scores.reverse());
     });
-    app.ports.scoreBoard.send(scores.reverse());
   });
   app.ports.setBloodOpacity.subscribe(function(life) {
 
