@@ -1,26 +1,63 @@
 <html>
 <header>
 <!--<script src="howler.min.js"></script>-->
+<script src="https://cdn.firebase.com/js/client/2.4.2/firebase.js"></script>
 <script src="game.js"></script>
 <link rel="stylesheet" type="text/css" href="style.css">
 <script>
-  /*
+/*
   var music = new Howl({
-    urls: ['http://xapbectep.com/game/sound/actofwar.mp3'],
+    urls: ['sound/actofwar.mp3'],
     loop: true
-  })
+  });
+  var intr = new Howl({
+    urls: ['sound/intro.mp3'],
+    loop: true
+  });
   var shot = new Howl({
-    urls: ['http://xapbectep.com/game/sound/laser.mp3'],
+    urls: ['sound/laser.mp3'],
     loop: false
   });
- */
-var app = Elm.Game.fullscreen();
+  var explosion = new Howl({
+    urls: ['sound/explosion.mp3'],
+    loop: false
+  });
+  var rocket = new Howl({
+    urls: ['sound/laser2.mp3'],
+    loop: false
+  });
+  var beep = new Howl({
+    urls: ['sound/click1.mp3'],
+    loop: false
+  });
+  var beep2 = new Howl({
+    urls: ['sound/click2.mp3'],
+    loop: false
+  });
+*/
+  var app = Elm.Game.fullscreen();
   app.ports.music.subscribe(function(name ) {
     //music.play();
   });
   app.ports.sound.subscribe(function(name) {
     //if(name == "shot")
       //shot.play();
+  });
+  app.ports.getScoreBoard.subscribe(function(player) {
+
+    var scoresRef = new Firebase("https://scoreboard-a88c9.firebaseio.com/scoreboard");
+    var scores = [];
+    scoresRef.push({
+      "name" : player[0],
+      "score" : player[1]
+    });
+    scoresRef.orderByChild("score").limitToLast(30).on('value', function(snap) {
+       snap.forEach(function(data) {
+         var score = [data.val().name,data.val().score];
+         scores.push(score);
+       });
+    });
+    app.ports.scoreBoard.send(scores.reverse());
   });
   app.ports.setBloodOpacity.subscribe(function(life) {
 

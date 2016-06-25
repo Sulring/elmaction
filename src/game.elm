@@ -117,7 +117,7 @@ type Msg
     | SetName String
     | FetchSucceed Scores
     | FetchFail Http.Error
-    | FetchScoreBoard Int
+    | FetchScore
     | GenerateDropCrate (Int,Vec3)
     | Explosion Vec3
 
@@ -126,14 +126,8 @@ type Collision = Collision
     , effectOnTarget : (Actor -> Actor)                 -- effects on collision for the target Actor
     , effectOnSelf : (Actor -> Actor)                 -- effects on collision for the source Actor
     }
-type alias ScoreItem =
-    { name: String
-    , score: Int
-    }
-type alias Scores =
-    { scores: List ScoreItem
-    , date: String
-    }
+type alias ScoreItem = (String,Int)
+type alias Scores = List ScoreItem
 
 type ActorType
     = Player                                            -- Player character controlled by Input. Highlander Format
@@ -192,6 +186,10 @@ port music : String -> Cmd msg
 port sound : String -> Cmd msg
 
 port setBloodOpacity : Int -> Cmd msg
+
+port getScoreBoard : (String, Int) -> Cmd msg
+
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update action model =
@@ -261,6 +259,8 @@ update action model =
                     (model, Cmd.none)
         PlayMusic s ->
             (model, music s)
+        FetchScore ->
+            (model, getScoreBoard (model.playerName,model.score))
         SetName name ->
             ({model | playerName = String.trim name }, Cmd.none)
         FetchSucceed list ->
@@ -404,8 +404,6 @@ update action model =
 
         SetGameDifficulty i ->
             ({model | gameDifficulty = i}, Task.perform SoundError ChangeStatus (succeed Options))
-        FetchScoreBoard i ->
-            (model, Task.perform FetchFail FetchSucceed (Http.get decodeScoreBoard (scoreBoardUrl model)))
         EnterButton ->
             if model.status == EnterName
                 then
@@ -414,8 +412,8 @@ update action model =
                     (model, if String.isEmpty (log "STRING"model.playerName) then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
         ExitButton ->
             case model.status of
-                Won -> (model, Task.perform SoundError FetchScoreBoard (succeed 1))
-                GameOver -> (model, Task.perform SoundError FetchScoreBoard (succeed 1))
+                Won -> update FetchScore model
+                GameOver -> update FetchScore model
                 Highscore-> (model, Task.perform SoundError ChangeStatus (succeed MainMenu))
                 Speed -> (model, Task.perform SoundError ChangeStatus (succeed Options))
                 Difficulty -> (model, Task.perform SoundError ChangeStatus (succeed Options))
@@ -1225,20 +1223,6 @@ windowSize : Task Error Window.Size -> Cmd Msg
 windowSize t =
     Task.perform WindowSizeError WindowSizeSuccess t
 
-
-
-decodeScoreItem : Json.Decoder ScoreItem
-decodeScoreItem =
-    Json.object2 ScoreItem
-        ("name" := Json.string)
-        ("score" := Json.int)
-
-decodeScoreBoard : Json.Decoder Scores
-decodeScoreBoard =
-    Json.object2 Scores
-        ("scores" := Json.list decodeScoreItem)
-        ("date" := Json.string)
-
 init : ( Model, Cmd Msg )
 init =
     ( { textures = Dict.empty
@@ -1254,7 +1238,7 @@ init =
       , gameDifficulty = False
       , playerName = ""
       , score = 0
-      , scoreList = {scores = [], date = ""}
+      , scoreList = []
       }
     , Cmd.batch
         [ Window.size |> windowSize
@@ -1358,6 +1342,8 @@ makeWorldTranslation gameSpeed pos dt {x,y} lookAt =
     in
         makeTranslate (add pos (Math.Vector3.scale ((gameSpeed* dt)/10000) (transform lookAt dir)))
 
+port scoreBoard : (Scores -> msg) -> Sub msg
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     [ AnimationFrame.diffs Animate
@@ -1367,6 +1353,7 @@ subscriptions _ =
     , Mouse.clicks(mouseClicks)
     , Window.resizes WindowSizeSuccess
     , Mouse.moves (\{ x, y } -> UpdateMouse { x = x, y = y })
+    , scoreBoard FetchSucceed
     ]
         |> Sub.batch
 
@@ -1549,13 +1536,13 @@ credits =
 highscore : Model -> Html Msg
 highscore model =
     let
-        divMap s = div [] [ text (s.name ++ " - " ++ ( toString s.score )) ]
+        divMap s = div [] [ text (fst s ++ " - " ++ ( toString (snd s) )) ]
     in
         body [] [ div [id "menuOverlay"] []
                 , div [id "creditlist", onClick (ChangeStatus MainMenu)]
-                    ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ if List.isEmpty model.scoreList.scores 
+                    ([ (div [id "creditsheader"] [ text "HIGH SCORES"]) ] ++ if List.isEmpty model.scoreList
                                                                                 then [div [] [ text "Can't connect to the scoreboard server!" ]]
-                                                                                else (List.map divMap model.scoreList.scores))
+                                                                                else (List.map divMap model.scoreList))
                 ]
 
 
@@ -1566,7 +1553,7 @@ view model =
       in
         case model.status of
             GameOver ->
-                body [] [ div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                body [] [ div [id "menuOverlay", onClick FetchScore] [], div [id "gameover", onClick FetchScore] [text "GAMEOVER. No continues left."], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             MainMenu ->
                 mainMenu
             Credits ->
@@ -1586,7 +1573,7 @@ view model =
                         , button [id "nameButton", onClick EnterButton, onMouseEnter (PlaySound "beep")] []]
             Won ->
                 body [] [ div [id "menuOverlay"] []
-                        , div [id "menuOverlay", onClick (FetchScoreBoard 1)] [], div [id "gameover", onClick (FetchScoreBoard 1)] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
+                        , div [id "menuOverlay", onClick FetchScore] [], div [id "gameover", onClick FetchScore] [text "You've won!"], div [id "gameoverDesc"] [text "Press Esc or click anywhere to return to main menu."]]
             Highscore ->
                 highscore model
             Game -> body []
