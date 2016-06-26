@@ -242,7 +242,7 @@ update action model =
                 else
                     if model.status == WaitingForHighscore
                         then
-                            if List.isEmpty (log "LIST" model.scoreList) && model.waiting < 5000
+                            if List.isEmpty  model.scoreList && model.waiting < 5000
                                 then ({model | waiting = model.waiting + dt}, Cmd.none)
                                 else update (ChangeStatus Highscore) { model | waiting = 0 }
                         else
@@ -282,7 +282,7 @@ update action model =
         SetName name ->
             ({model | playerName = String.trim name }, Cmd.none)
         FetchSucceed list ->
-            update (ChangeStatus WaitingForHighscore) {model | scoreList = log "LIST>" list}
+            update (ChangeStatus WaitingForHighscore) {model | scoreList =list}
         AddScore i ->
             let
                 player = getPlayerActor model
@@ -303,7 +303,7 @@ update action model =
 
         RandomFireRate list ->
                 let
-                    actorManager = setRandoms (log "RANDOM" list) (Dict.keys model.actorManager) model.actorManager
+                    actorManager = setRandoms  list (Dict.keys model.actorManager) model.actorManager
                 in
                     ( { model | actorManager = actorManager}, Cmd.none)
         GetRandomDirectionVector actor ->
@@ -336,7 +336,7 @@ update action model =
                     vm = vec3 mx my 0
 
                     mousePosition = vec3 dx dy -4.99
-                    target = log "TEST" (Math.Vector3.add player.position vm)
+                    target = Math.Vector3.add player.position vm
                     --target = rayCast model
                     size = actor.size
                     slugint = model.last_i + 1
@@ -420,9 +420,9 @@ update action model =
         EnterButton ->
             if model.status == EnterName
                 then
-                    (model, if String.isEmpty (log "STRING" model.playerName) then Cmd.none else Task.perform SoundError ChangeStatus (succeed Help))
+                    (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Help))
                 else
-                    (model, if String.isEmpty (log "STRING"model.playerName) then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
+                    (model, if String.isEmpty model.playerName then Cmd.none else Task.perform SoundError ChangeStatus (succeed Game))
         ExitButton ->
             case model.status of
                 Won -> update FetchScore model
@@ -439,14 +439,14 @@ setRandoms xs enemies am =
             (i :: l) ->
                 case enemies of
                     (enemy :: elist) ->
-                        case Dict.get (log "ENEMY" enemy) am of
+                        case Dict.get enemy am of
                             Nothing -> setRandoms xs elist am
                             Just x ->
                                 if x.actorType == NPC
                                     then
                                         let
                                             ca = case x.characterAttributes of
-                                                    Just y -> Just { y | rateOfFire = log ("RATEOF " ++x.key) (i*2 +   y.rateOfFire) }
+                                                    Just y -> Just { y | rateOfFire =  (i*2 +   y.rateOfFire) }
                                                     Nothing -> Nothing
                                             newAm = updateActorManagerDict x.key
                                                         { x | randomVal = clamp 0 (Basics.round (((toFloat i) + 100.0) / 2.0)) 100
@@ -558,10 +558,59 @@ affectActorPair (Collision c1, Collision c2) (source, target) =
                 else target
     in ( a1, a2 )
 
+vlength : Vec3 -> Float
+vlength v = Basics.sqrt ((Math.Vector3.getX v) ^ 2 + (Math.Vector3.getY v) ^ 2)
+
+vnormalize : Vec3 -> Vec3
+vnormalize v =
+    let len = vlength v
+    in vec3 ((Math.Vector3.getX v) / len) ((Math.Vector3.getY v) / len) (Math.Vector3.getZ v)
+
+vscale : Float -> Vec3 -> Vec3
+vscale f v = vec3 (f * (Math.Vector3.getX v)) (f * (Math.Vector3.getY v)) (Math.Vector3.getZ v)
+
+vadd : Vec3 -> Vec3 -> Vec3
+vadd v w = vec3 ((Math.Vector3.getX v) + (Math.Vector3.getX w)) ((Math.Vector3.getY v) + (Math.Vector3.getY w)) (Math.Vector3.getZ v)
+
+vsub : Vec3 -> Vec3 -> Vec3
+vsub v w = vec3 ((Math.Vector3.getX v) - (Math.Vector3.getX w)) ((Math.Vector3.getY v) - (Math.Vector3.getY w)) (Math.Vector3.getZ v)
+
+bounceFromList : Actor -> List (String,Actor) -> Vec3
+bounceFromList a am =
+    case am of
+        ( x :: xs ) ->
+            let
+                target = snd x
+                acceptableDistance = 2*(target.size + a.size)
+                blockingDistance = (target.size + a.size)
+                diff = acceptableDistance - blockingDistance
+                currentDistance = vlength (vsub target.position a.position)
+                currentDiff = currentDistance - blockingDistance
+                bounceVector = vnormalize (vsub a.position target.position)
+                c = if currentDistance > acceptableDistance
+                        then 0
+                        else if currentDistance < blockingDistance
+                                then 1
+                                else currentDiff/diff
+            in
+                Math.Vector3.add bounceVector (bounceFromList a xs)
+        [] -> vec3 0 0 0
+
+bounce : Actor -> Vec3 -> ActorManager -> Actor
+bounce a newPosition am =
+    let
+        movement = vsub newPosition a.position
+        movementVector = vnormalize movement
+        movementLength = vlength movement
+        bounceVector = bounceFromList a (Dict.toList am)
+        resultingVector = vscale movementLength (vnormalize (vadd movementVector bounceVector))
+
+    in { a | position = vadd resultingVector a.position }
+
 checkCollisions : String -> Actor -> Vec3 -> ActorManager -> ActorManager
 checkCollisions actorKey actor position am =
     let
-        collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1 + r2)/3 ) ^ 2  -- two circles collision
+        collide v1 r1 v2 r2 = ( Math.Vector3.getX v2 - Math.Vector3.getX v1 ) ^ 2 + ( Math.Vector3.getY v2 - Math.Vector3.getY v1 ) ^ 2 <= ( (r1 + r2)*2 ) ^ 2  -- two circles collision
         collisionFilter key a                                                             -- check if path is blocked
             =  case a.collision of
                     Nothing -> False
@@ -571,14 +620,20 @@ checkCollisions actorKey actor position am =
 
         dict = Dict.remove actorKey am                                                    -- removing Actor from list (don't need to check collisions on self)
         dicts = Dict.partition collisionFilter dict                                       -- partitioning Dict into two Dicts: fst - blocking Actors, snd - overlapping Actor
+
         blocked =
             case actor.collision of
                 Nothing -> False
                 Just x ->
                     let (Collision c) = x
                     in (Dict.size ( fst dicts ) ) /= 0 && c.blocking                      -- is the path blocked?
-        nactor = { actor | position = if blocked then actor.position else position }      -- path is blocked -> old position, otherwise -> new position
-        blockingDict = ( fst dicts )
+
+        nactor = if blocked && actor.actorType /= Player
+                    then
+                        bounce actor position (fst dicts)
+                    else
+                        { actor | position = position }
+
     in
         affectActorPairs actorKey (Dict.keys (snd dicts)) (updateActorManagerDict actorKey nactor ( am ) )
 
@@ -588,7 +643,7 @@ updateActorManagerList dt model am amList =
         ( a :: list ) ->
             let
                 act = snd a
-                key = log "ACTS" (fst a)
+                key = fst a
                 player =
                     case ( Dict.get playerActor am ) of
                         Nothing -> act
@@ -764,7 +819,7 @@ updateActorManagerList dt model am amList =
                             worldTranslation = makeTranslate <| vec3 -(Math.Vector3.getX player.position) -(Math.Vector3.getY player.position) 0
                             renderPosition = transform worldTranslation tPosition
 
-                            (tActor,fireCommand) = if log "DESTIO" destination then case actor.onDestination of
+                            (tActor,fireCommand) = if  destination then case actor.onDestination of
                                                                          Nothing -> (actor,Nothing)
                                                                          Just (OnAction f) ->  f.func actor
                                                                   else (actor,Nothing)
@@ -933,7 +988,7 @@ bulletHit actor =
     let
         newCharacterAttributes = case actor.characterAttributes of
             Nothing -> Nothing
-            Just x -> Just { x | health = Basics.clamp 0 (x.health - 20) 100 }
+            Just x -> Just { x | health = Basics.clamp 0 (x.health - 2) 100 }
 
     in
         { actor | characterAttributes = newCharacterAttributes }
@@ -1199,6 +1254,7 @@ fetchTextures =
             , ( "rocketCrate", "texture/grenadeCrate.png")
             , ( "explosion", "texture/explosion.png")
             , ( "death", "texture/death.png")
+            , ( "zombie", "texture/character4.png")
             ]
         )
 
@@ -1210,12 +1266,17 @@ framedTextures = Dict.fromList [ ( "assault", (4, False) )
                                , ("rocketCrate",(1,False))
                                , ("rocket",(1,False))
                                , ("explosion",(16,False))
+                               , ("zombie", (1, False))
                                , ("death",(16,False)) ]
+
 
 animationDict : AnimationDictionary
 animationDict = Dict.fromList [ ( "assault-idle", { duration = 100, frames = [ ( 1, 100 ) ] } )
                               , ( "assault-move", { duration = 200, frames = [ ( 1, 100 ) , ( 0, 100 ) ] } )
                               , ( "assault-fire", { duration = 300, frames = [ ( 1, 100 ) , ( 3, 50  ) , ( 2, 100 ) , (3, 50 ) ] } )
+                              , ( "zombie-idle", { duration = 300, frames = [ ( 0, 100 )  ] } )
+                              , ( "zombie-move", { duration = 300, frames = [ ( 0, 100 )  ] } )
+                              , ( "zombie-fire", { duration = 300, frames = [ ( 0, 100 )  ] } )
                               , ( "ground-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "slug-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
                               , ( "healthCrate-idle",  { duration = 100, frames = [ ( 0, 100 ) ] } )
