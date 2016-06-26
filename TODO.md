@@ -14,8 +14,8 @@
     * [x] Health
     * [x] Rockets
 * [ ] Additional textures for enemies
-* [ ] Fix disappearing enemies bug
-* [ ] Fix enemies sticking together on collision bug
+* [x] Fix disappearing enemies bug
+* [x] Fix enemies sticking together on collision bug
 * [ ] Clean up the source code
 
 #### Optional items
