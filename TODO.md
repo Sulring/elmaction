@@ -1,4 +1,9 @@
-#### Roadmap items
+#### TODO
+* [ ] Fix memory leak...
+* [ ] Additional textures for enemies
+* [ ] Clean up the source code
+
+#### DONE
 * [x] Menu
     - [x] Start
     - [x] Options
@@ -7,16 +12,14 @@
     - [x] Credits
     - [x] Score
 * [x] Automatic enemy generation
-    - [x] (optional) Waves!
+    - [x] Waves!
 * [x] Secondary weapon (Rockets)
     - [x] Explosion animation
 * [x] Pickups
     * [x] Health
     * [x] Rockets
-* [ ] Additional textures for enemies
 * [x] Fix disappearing enemies bug
 * [x] Fix enemies sticking together on collision bug
-* [ ] Clean up the source code
 
 #### Optional items
 * [ ] (optional) Add more character classes
