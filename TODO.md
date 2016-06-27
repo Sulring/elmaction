@@ -6,8 +6,8 @@
         - [x] Difficulty
     - [x] Credits
     - [x] Score
-* [ ] Automatic enemy generation
-    - [ ] (optional) Waves!
+* [x] Automatic enemy generation
+    - [x] (optional) Waves!
 * [x] Secondary weapon (Rockets)
     - [x] Explosion animation
 * [x] Pickups
