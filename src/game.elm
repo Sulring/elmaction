@@ -60,6 +60,8 @@ type alias Model =
     , score : Int
     , waiting : Float
     , startCounter : Float
+    , waveCounter : Int
+    , enemyCounter : Int
     }
 
 
@@ -110,7 +112,7 @@ type Msg
     | ChangeStatus Status
     | GetRandomDirectionVector Actor
     | RandomDirectionVector (Actor,Vec3)
-    | GetRandomFireRate Int
+    | GetRandomFireRate
     | RandomFireRate (List Int)
     | AddScore Int
     | SetGameSpeed Float
@@ -122,6 +124,8 @@ type Msg
     | FetchScore
     | GenerateDropCrate (Int,Vec3)
     | Explosion Vec3
+    | GetRandomEnemyPositions (List Int)
+    | RandomEnemyPositions (List Int) (List (Float,Float))
 
 type Collision = Collision
     { blocking : Bool                                   -- collision type. True = Blocking / False = Overlapping
@@ -169,6 +173,7 @@ type alias Actor =
     , rotation : Mat4                                   -- Actor rotation
     , worldTransformationMatrix : Mat4
     , movesTo : Maybe Vec3                              -- AI character waypoints / multiplayer waypoints
+    , lastChange : Float
     , moves : Bool                                      -- Actor moves (see rotation for direction)
     , timeToLive : Maybe Int                            -- for temporary objects like decals. Nothing: lives forever. Just x: dies in x milliseconds
     , collision : Maybe Collision                       -- type of collisions of the Actor.
@@ -192,6 +197,33 @@ port setBloodOpacity : Int -> Cmd msg
 port getScoreBoard : (String, Int) -> Cmd msg
 
 
+mainLoop : Model -> Float -> (Model, Cmd Msg)
+mainLoop model dt =
+    if model.startCounter > 0
+      then
+          let
+            numerize f = Basics.round (f / 1000)
+            changed = (numerize model.startCounter) /= (numerize (model.startCounter-dt))
+          in
+            if changed
+                then update (PlaySound "beep2") {model | startCounter = model.startCounter - dt}
+                else ({model | startCounter = model.startCounter - dt}, Cmd.none)
+
+      else
+        let
+            dirs = directions model.keys
+
+            characterAttributes = getCharacterAttributes model playerActor
+
+            actorManager = updateActorManager dt model
+            actorsAlive = fireCommandsAndkillActors actorManager
+
+            last_i = if counter > 5000 then 1 else model.last_i
+            counter = if counter > 5000 then 0 else (model.counter + 1)
+        in
+            ( { model | actorManager = fst actorsAlive
+                      , counter = counter
+                      , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update action model =
@@ -215,30 +247,14 @@ update action model =
         Animate dt ->
             if model.status == Game
                 then
-                    if model.startCounter > 0
-                      then
-                          let
-                            numerize f = Basics.round (f / 1000)
-                            changed = (numerize model.startCounter) /= (numerize (model.startCounter-dt))
-                          in
-                            if changed
-                                then update (PlaySound "beep2") {model | startCounter = model.startCounter - dt}
-                                else ({model | startCounter = model.startCounter - dt}, Cmd.none)
-
-                      else
-                        let
-                            dirs = directions model.keys
-
-                            characterAttributes = getCharacterAttributes model playerActor
-
-                            actorManager = updateActorManager dt model
-                            actorsAlive = fireCommandsAndkillActors actorManager
-                            counter = model.counter + 1
-                            last_i = if counter > 5000 then 1 else model.last_i
-                        in
-                            ( { model | actorManager = fst actorsAlive
-                                      , counter = counter
-                                      , last_i = last_i }, Cmd.batch [ (snd actorsAlive ), setBloodOpacity characterAttributes.health ] )
+                    let
+                        filterEnemies key actor = actor.actorType == NPC
+                        enemiesAlive = Dict.size (Dict.filter filterEnemies model.actorManager)
+                    in if enemiesAlive > 0
+                          then
+                              mainLoop model dt
+                          else
+                              update GetRandomFireRate { model | waveCounter = model.waveCounter + 1 }
                 else
                     if model.status == WaitingForHighscore
                         then
@@ -295,25 +311,30 @@ update action model =
                                             model.actorManager
                                    , score = ca.score + i
                             }
-            in if ca.score >= 300
-                    then update  (ChangeStatus Won) newModel
-                    else (newModel,Cmd.none)
-        GetRandomFireRate i ->
-            (model, Random.generate RandomFireRate intList )
+            in (newModel,Cmd.none)
 
-        RandomFireRate list ->
-                let
-                    actorManager = setRandoms  list (Dict.keys model.actorManager) model.actorManager
-                in
-                    ( { model | actorManager = actorManager}, Cmd.none)
         GetRandomDirectionVector actor ->
             (model, Random.generate RandomDirectionVector (randomVectorForActor actor) )
         RandomDirectionVector (actor,dir) ->
             let
                 player = getPlayerActor model
-                newActor = { actor | movesTo = Just (Math.Vector3.add player.position  (Math.Vector3.scale 3 (Math.Vector3.normalize ( vec3 (Math.Vector3.getX dir) (Math.Vector3.getY dir) 0)))) }
+                newActor = { actor | lastChange = 0
+                                   , movesTo = Just (Math.Vector3.add player.position  (Math.Vector3.scale 3 (Math.Vector3.normalize ( vec3 (Math.Vector3.getX dir) (Math.Vector3.getY dir) 0)))) }
             in
                 ({ model | actorManager = updateActorManagerDict actor.key newActor model.actorManager } , Cmd.none)
+
+        GetRandomFireRate ->
+            (model, Random.generate RandomFireRate (intList (waveEnemiesNumber model.waveCounter)) )
+
+        RandomFireRate list ->
+                    update (GetRandomEnemyPositions list) model
+        GetRandomEnemyPositions list ->
+            (model, Random.generate (RandomEnemyPositions list) (randomEnemyPositions (waveEnemiesNumber model.waveCounter)))
+        RandomEnemyPositions list xs ->
+            let
+                newModel = waveGenerator model 0 xs list
+            in
+                ( { newModel | startCounter = 4999 }, Cmd.none)
         SoundError err ->
             ( model, Cmd.none )
 
@@ -322,6 +343,7 @@ update action model =
         Fire (position,direction,actor) ->
             let
                     player = getPlayerActor model
+
                     worldTranslation = makeTranslate <| vec3 -(Math.Vector3.getX player.position) -(Math.Vector3.getY player.position) 0
 
                     ndsx =(toFloat model.mousePosition.x)/(toFloat model.wsize.width)
@@ -352,7 +374,9 @@ update action model =
                                             tam = updateActorManagerDict actor.key { actor | characterAttributes = Just { x | rockets = x.rockets - 1} } model.actorManager
                                         in
                                             Dict.insert slugname (templateRocketActor  model.gameSpeed ( slugint ) newPosition target direction) tam
-                                    else Dict.insert slugname (templateSlugActor model.gameSpeed ( slugint ) newPosition direction) model.actorManager
+                                    else
+                                        let damage = if actor.actorType == Player then 20 else 5
+                                        in Dict.insert slugname (templateSlugActor model.gameSpeed ( slugint ) newPosition direction damage) model.actorManager
 
             in
                 ({ model | last_i = model.last_i + 1
@@ -402,7 +426,7 @@ update action model =
                                        , wsize = model.wsize
                             }
                 EnterName ->
-                    ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError GetRandomFireRate (succeed 1)])
+                    ({model | status = s}, Task.perform SoundError PlaySound (succeed "beep2"))
                 Game ->
                     ({model | status = s}, Cmd.batch[Task.perform SoundError PlaySound (succeed "beep2"),Task.perform SoundError PlayMusic (succeed "actofwar")])
                 Won ->
@@ -448,7 +472,7 @@ setRandoms xs enemies am =
                                             ca = case x.characterAttributes of
                                                     Just y -> Just { y | rateOfFire =  (i*2 +   y.rateOfFire) }
                                                     Nothing -> Nothing
-                                            newAm = updateActorManagerDict x.key
+                                            newAm = updateActorManagerDict (log ("Setting Random " ++ (toString i)  ++ " for") x.key)
                                                         { x | randomVal = clamp 0 (Basics.round (((toFloat i) + 100.0) / 2.0)) 100
                                                             , characterAttributes = ca
                                                         }
@@ -462,26 +486,17 @@ setRandoms xs enemies am =
 
             [] -> am
 
-
-
-
-
-
-scoreBoardUrl : Model -> String
-scoreBoardUrl model =
-    "http://example.com/gamescore.php?name="
-           ++ model.playerName
-           ++ "&score="
-           ++ (toString model.score)
-
-intList : Random.Generator (List Int)
-intList = Random.list 4 (Random.int -100 100 )
+intList : Int -> Random.Generator (List Int)
+intList i = Random.list i (Random.int -100 100 )
 
 setActorVectorPair : Actor -> Float -> Float -> Float -> (Actor, Vec3)
 setActorVectorPair actor x y z = (actor, vec3 x y z)
 
 randomVectorForActor : Actor -> Random.Generator (Actor,Vec3)
 randomVectorForActor actor  = Random.map3 (setActorVectorPair actor) (Random.float -1 1) (Random.float -1 1) (Random.float -1 1)
+
+randomEnemyPositions : Int -> Random.Generator (List (Float, Float))
+randomEnemyPositions i = Random.list i (Random.pair (Random.float -1.66 1.66) (Random.float -1.66 1.66))
 
 getPlayerActor : Model -> Actor
 getPlayerActor model =
@@ -510,9 +525,12 @@ ai actor model =
         Nothing -> (vec3 0 0 0, Cmd.none)
         Just x -> case actor.movesTo of
                     Nothing -> (x.position, Task.perform SoundError GetRandomDirectionVector (succeed actor))
-                    Just mov -> if Math.Vector3.length (Math.Vector3.sub x.position mov) < 0.5 || Math.Vector3.length (Math.Vector3.sub actor.position mov) < 0.5
-                        then (mov, Task.perform SoundError GetRandomDirectionVector (succeed actor))
-                        else (mov, Cmd.none)
+                    Just mov ->
+                        if Math.Vector3.length (Math.Vector3.sub x.position mov) < 0.5
+                        || Math.Vector3.length (Math.Vector3.sub actor.position mov) < 0.5
+                        || actor.lastChange > 5000
+                            then (mov, Task.perform SoundError GetRandomDirectionVector (succeed actor))
+                            else (mov, Cmd.none)
 
 updateActorManagerDict : String -> Actor -> ActorManager ->  ActorManager
 updateActorManagerDict key target am =
@@ -575,6 +593,9 @@ vadd v w = vec3 ((Math.Vector3.getX v) + (Math.Vector3.getX w)) ((Math.Vector3.g
 vsub : Vec3 -> Vec3 -> Vec3
 vsub v w = vec3 ((Math.Vector3.getX v) - (Math.Vector3.getX w)) ((Math.Vector3.getY v) - (Math.Vector3.getY w)) (Math.Vector3.getZ v)
 
+cl : Float -> Float -> Float -> Float
+cl a x b = Basics.min (Basics.max a x) b
+
 bounceFromList : Actor -> List (String,Actor) -> Vec3
 bounceFromList a am =
     case am of
@@ -596,16 +617,102 @@ bounceFromList a am =
                 Math.Vector3.add bounceVector (bounceFromList a xs)
         [] -> vec3 0 0 0
 
-bounce : Actor -> Vec3 -> ActorManager -> Actor
-bounce a newPosition am =
+bounceFromBounds : Actor -> Vec3
+bounceFromBounds a =
+    let
+        x = Math.Vector3.getX a.position
+        y = Math.Vector3.getY a.position
+        acceptableDistance = 0.7
+        blockingDistance = 0.35
+        --diff = acceptableDistance - blockingDistance
+        currentX = if x > 0
+                    then 10 - x
+                    else 10 + x
+        currentY = if x > 0
+                    then 10 - y
+                    else 10 + y
+
+        norm x = if x > acceptableDistance
+                    then log a.key 0
+                    else if x < blockingDistance
+                        then log a.key 1
+                        else log a.key ((acceptableDistance - x) / blockingDistance)
+        bounceVectorX =
+            if x > 0
+                then vscale (norm currentX) (vec3 -1 0 0)
+                else vscale (norm currentX) (vec3  1 0 0)
+
+        bounceVectorY =
+            if y > 0
+                then vscale (norm currentY) (vec3 0 -1 0)
+                else vscale (norm currentY) (vec3 0  1 0)
+
+    in
+        log ("bounce." ++ a.key) (vadd bounceVectorX bounceVectorY)
+
+bounce : Bool -> Actor -> Vec3 -> ActorManager -> Actor
+bounce blocked a newPosition am =
     let
         movement = vsub newPosition a.position
-        movementVector = vnormalize movement
         movementLength = vlength movement
-        bounceVector = bounceFromList a (Dict.toList am)
-        resultingVector = vscale movementLength (vnormalize (vadd movementVector bounceVector))
+        movementVector = if movementLength < 0.0001 then vec3 0 0 0 else (vnormalize movement)
+        bounceVector = if blocked
+                            then
+                                vadd (bounceFromBounds a) (bounceFromList a (Dict.toList am))
+                            else
+                                bounceFromBounds a
 
-    in { a | position = vadd resultingVector a.position }
+        resultingVector = if movementLength < 0.0001 then vec3 0 0 0 else vscale movementLength (vnormalize (vadd movementVector bounceVector))
+
+    in { a | position = log ("bounce2." ++ a.key) (vadd a.position resultingVector) }
+
+waveEnemiesNumber : Int -> Int
+waveEnemiesNumber n = 10  + 5*n
+
+sector : Vec3 -> (Int, Int)
+sector v = ((Basics.round ((Math.Vector3.getX v )/3.34)),(Basics.round ((Math.Vector3.getY v )/3.34)))
+
+positionInSector : (Int,Int) -> (Float,Float) -> Vec3
+positionInSector (x,y) (vx,vy) = vec3 ((toFloat x) * 3.33 + vx) ((toFloat x) * 3.33 + vy) -4.99
+
+generateEnemyInSector : Model -> (Int,Int) -> (Float,Float) -> Int -> ActorManager -> ActorManager
+generateEnemyInSector model sector position rate am =
+    let
+        name = log "Generating" ("Enemy" ++ (toString model.enemyCounter))
+        enemyPosition = log "Generating at position" (positionInSector sector position)
+    in
+        Dict.insert name (templateEnemyActor model.gameSpeed name enemyPosition rate) am
+
+waveGenerator : Model -> Int -> List (Float,Float) -> List Int -> Model
+waveGenerator model sec list rates =
+    let
+        am = model.actorManager
+        player = getPlayerActor model
+        playerSector = sector player.position
+        currentSector = (((sec % 7) - 3), ((sec // 7) - 3))
+        nextSector = (sec + 1) % 48
+    in
+        if playerSector == currentSector
+            then waveGenerator model nextSector list rates
+            else
+                case list of
+                    (x :: xs) ->
+                        case rates of
+                            (r :: rs) ->
+                                let newAm = generateEnemyInSector model currentSector x r model.actorManager
+                                in waveGenerator { model | actorManager = newAm
+                                                         , enemyCounter = model.enemyCounter + 1 }
+                                                 nextSector
+                                                 xs
+                                                 rs
+                            [] ->
+                                let newAm = generateEnemyInSector model currentSector x 50 model.actorManager
+                                in waveGenerator { model | actorManager = newAm
+                                                         , enemyCounter = model.enemyCounter + 1 }
+                                                 nextSector
+                                                 xs
+                                                 rates
+                    []  -> { model | actorManager = am }
 
 checkCollisions : String -> Actor -> Vec3 -> ActorManager -> ActorManager
 checkCollisions actorKey actor position am =
@@ -628,11 +735,7 @@ checkCollisions actorKey actor position am =
                     let (Collision c) = x
                     in (Dict.size ( fst dicts ) ) /= 0 && c.blocking                      -- is the path blocked?
 
-        nactor = if blocked && actor.actorType /= Player
-                    then
-                        bounce actor position (fst dicts)
-                    else
-                        { actor | position = position }
+        nactor = bounce (blocked && actor.actorType /= Player) actor position (fst dicts)
 
     in
         affectActorPairs actorKey (Dict.keys (snd dicts)) (updateActorManagerDict actorKey nactor ( am ) )
@@ -668,7 +771,8 @@ updateActorManagerList dt model am amList =
                             moving = if dirs.x /= 0 || dirs.y /=0
                                         then Just ( normalize ( vec3 (toFloat dirs.x) (toFloat dirs.y) 0 ) )
                                         else Nothing
-                            worldTransformationMatrix = makeWorldTranslation model.gameSpeed actor.position dt dirs model.lookAt
+                            pos = vec3 (cl -10 (Math.Vector3.getX actor.position) 10 ) (cl -10 (Math.Vector3.getY actor.position) 10 ) (Math.Vector3.getZ actor.position)
+                            worldTransformationMatrix = makeWorldTranslation model.gameSpeed pos dt dirs model.lookAt
                             newPosition = transform worldTransformationMatrix (vec3 0 0 0)
                             newAm = checkCollisions key actor newPosition am
                             checkedActor =
@@ -681,7 +785,7 @@ updateActorManagerList dt model am amList =
                                                , timeToLive = if newCharacterAttributes.health <= 0 then Just 0 else checkedActor.timeToLive
                                                , characterAttributes = Just newCharacterAttributes
                                                , rotation = model.lookAt
-                                               , position = newPosition
+                                               , position = log "POS" newPosition
                                                , worldTransformationMatrix = worldTransformationMatrix
                                        }
 
@@ -758,7 +862,8 @@ updateActorManagerList dt model am amList =
                             newActor = { checkedActor | animation = animateSprite isShooting (dt*(model.gameSpeed/10)) movesTo checkedActor.texture checkedActor.animation
                                                       , rotation = lookAt
                                                       , movesTo = movesTo
-                                                      , characterAttributes = newCharacterAttributes }
+                                                      , characterAttributes = newCharacterAttributes
+                                                      , lastChange = checkedActor.lastChange + dt }
 
                             (tActor, fireCommand2) =
                                 case newCharacterAttributes of
@@ -898,6 +1003,7 @@ templatePlayerActor name =     { key = name
                                , rotation = Math.Matrix4.identity
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , movesTo = Nothing
+                               , lastChange = 0
                                , moves = True
                                , timeToLive = Nothing
                                , collision = Just ( Collision { blocking = True
@@ -941,19 +1047,19 @@ death act = ( { act |                       timeToLive = Just 400
                                           , size = 0.2}
                                     , Nothing )
 
-templateEnemyActor : Float ->String -> Vec3  -> Actor
-templateEnemyActor gameSpeed name p =     { key = name
+templateEnemyActor : Float ->String -> Vec3 -> Int -> Actor
+templateEnemyActor gameSpeed name p rates =     { key = name
                                , actorType = NPC
                                , actorSubType = Nothing
                                , characterAttributes = Just { health = 100
                                                             , rockets = 0
                                                             , score = 0
-                                                            , rateOfFire = round (10000/gameSpeed)
+                                                            , rateOfFire = round ((10000 + toFloat rates)/gameSpeed)
                                                             , timeSinceLastFire = 0 }
                                , index= 8
                                , size = 0.25
                                , speed = 0.8
-                               , randomVal = 0
+                               , randomVal = rates
                                , texture = "assault"
                                , animation =      { name = "idle"
                                                   , current = 0
@@ -965,6 +1071,7 @@ templateEnemyActor gameSpeed name p =     { key = name
                                , rotation = Math.Matrix4.identity
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , movesTo = Nothing
+                               , lastChange = 0
                                , moves = False
                                , timeToLive = Nothing
                                , collision = Just ( Collision { blocking = True
@@ -983,12 +1090,12 @@ killBulletCollectable actor = case actor.actorSubType of
                                              then { actor | timeToLive = (Just 0) }
                                              else actor
 
-bulletHit: Actor -> Actor
-bulletHit actor =
+bulletHit: Int -> Actor -> Actor
+bulletHit damage actor =
     let
         newCharacterAttributes = case actor.characterAttributes of
             Nothing -> Nothing
-            Just x -> Just { x | health = Basics.clamp 0 (x.health - 2) 100 }
+            Just x -> Just { x | health = Basics.clamp 0 (x.health - damage) 100 }
 
     in
         { actor | characterAttributes = newCharacterAttributes }
@@ -996,8 +1103,8 @@ bulletHit actor =
 die : Actor -> Actor
 die actor ={ actor | timeToLive = Just 0 }
 
-templateSlugActor : Float -> Int -> Vec3 -> Mat4 -> Actor
-templateSlugActor gameSpeed i p r  =
+templateSlugActor : Float -> Int -> Vec3 -> Mat4 -> Int -> Actor
+templateSlugActor gameSpeed i p r d =
     let
         name = toString i
     in
@@ -1025,10 +1132,11 @@ templateSlugActor gameSpeed i p r  =
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , speed = 4
                                , movesTo = Nothing
+                               , lastChange = 0
                                , moves = True
                                , timeToLive = Just (round (10000/gameSpeed))
                                , collision = Just (Collision { blocking = False
-                                                             , effectOnTarget = bulletHit
+                                                             , effectOnTarget = bulletHit d
                                                              , effectOnSelf = die })
                                , affectsCamera = Nothing
                                , onDeath = Nothing
@@ -1064,6 +1172,7 @@ templateRocketActor gameSpeed i p t r  =
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , speed = 3
                                , movesTo = Just t
+                               , lastChange = 0
                                , moves = False
                                , timeToLive = Just (round (30000/gameSpeed))
                                , collision = Nothing
@@ -1100,6 +1209,7 @@ templateHealthActor gameSpeed i p  =
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , speed = 4
                                , movesTo = Nothing
+                               , lastChange = 0
                                , moves = False
                                , timeToLive = Just (round (100000/gameSpeed))
                                , collision = Just (Collision { blocking = False
@@ -1145,6 +1255,7 @@ templateRocketCrateActor gameSpeed i p  =
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , speed = 4
                                , movesTo = Nothing
+                               , lastChange = 0
                                , moves = False
                                , timeToLive = Just (round (100000/gameSpeed))
                                , collision = Just (Collision { blocking = False
@@ -1169,7 +1280,7 @@ templateGroundActor =          { key = "ground"
                                , actorSubType = Nothing
                                , characterAttributes = Nothing
                                , index= 10
-                               , size = 10
+                               , size = 20
                                , texture = "ground"
                                , randomVal = 0
                                , animation =      { name = "idle"
@@ -1183,6 +1294,7 @@ templateGroundActor =          { key = "ground"
                                , worldTransformationMatrix = Math.Matrix4.identity
                                , speed = 0
                                , movesTo = Nothing
+                               , lastChange = 0
                                , moves = False
                                , timeToLive = Nothing
                                , collision = Nothing
@@ -1194,10 +1306,6 @@ templateGroundActor =          { key = "ground"
 
 actorManager : ActorManager
 actorManager = Dict.fromList [ ("Player1", templatePlayerActor "Player1")
-                             , ("Enemy1", templateEnemyActor 10 "Enemy1" (vec3 2 2 -4.99))
-                             , ("Enemy2", templateEnemyActor 10 "Enemy2" (vec3 3 -2 -4.99))
-                             , ("Enemy3", templateEnemyActor 10 "Enemy3" (vec3 -3 0 -4.99))
-                             , ("Enemy4", templateEnemyActor 10 "Enemy4" (vec3 -3 3 -4.99))
                              , ("ground", templateGroundActor)
                              ]
 
@@ -1260,7 +1368,7 @@ fetchTextures =
 
 framedTextures : Dict.Dict String (Int,Bool)
 framedTextures = Dict.fromList [ ( "assault", (4, False) )
-                               , ( "ground", (10, True) )
+                               , ( "ground", (20, True) )
                                , ("slug", (1,False))
                                , ("healthCrate", (1,False))
                                , ("rocketCrate",(1,False))
@@ -1313,6 +1421,8 @@ init =
       , scoreList = []
       , waiting = 0
       , startCounter = 4999
+      , waveCounter = 0
+      , enemyCounter = 0
       }
     , Cmd.batch
         [ Window.size |> windowSize
@@ -1638,7 +1748,7 @@ game model =
                                     let c = Basics.floor(model.startCounter / 1000)
                                     in
                                         if c == 0
-                                            then [div [id "startCounter"] [ text "GO!" ]]
+                                            then [div [id "startCounter"] [ text ("WAVE " ++ (toString model.waveCounter)) ]]
                                             else [div [id "startCounter"] [ text (Basics.toString c) ]]
                                 else []))
 
