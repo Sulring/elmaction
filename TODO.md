@@ -1,7 +1,10 @@
 #### TODO
 * [ ] Fix memory leak...
 * [ ] Additional textures for enemies
-* [ ] Clean up the source code
+* [ ] Clean up
+  - [ ] Modularisation
+  - [ ] Optimisation
+  - [ ] Documentation
 
 #### DONE
 * [x] Menu
