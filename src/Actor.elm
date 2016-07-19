@@ -390,8 +390,10 @@ waveGenerator model sec list rates =
                     case rates of
                         r :: rs ->
                             let
+                                rightRate =
+                                    clamp 0 (Basics.round (((toFloat r) + 100.0) / 2.0)) 100
                                 newAm =
-                                    generateEnemyInSector model currentSector x r model.actorManager
+                                    generateEnemyInSector model currentSector x (log "Rate" rightRate) model.actorManager
                             in
                                 waveGenerator
                                     { model
