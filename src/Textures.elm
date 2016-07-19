@@ -92,6 +92,7 @@ fetchTextures =
             , ( "rocketCrate", "texture/grenadeCrate.png" )
             , ( "explosion", "texture/explosion.png" )
             , ( "death", "texture/death.png" )
+            , ( "clone", "texture/enemy.png")
             ]
         )
 
@@ -100,6 +101,7 @@ framedTextures : Dict.Dict String ( Int, Bool )
 framedTextures =
     Dict.fromList
         [ ( "assault", ( 4, False ) )
+        , ( "clone", ( 1, False ) )
         , ( "ground", ( 20, True ) )
         , ( "slug", ( 1, False ) )
         , ( "healthCrate", ( 1, False ) )
@@ -116,6 +118,9 @@ animationDict =
         [ ( "assault-idle", { duration = 100, frames = [ ( 1, 100 ) ] } )
         , ( "assault-move", { duration = 200, frames = [ ( 1, 100 ), ( 0, 100 ) ] } )
         , ( "assault-fire", { duration = 300, frames = [ ( 1, 100 ), ( 3, 50 ), ( 2, 100 ), ( 3, 50 ) ] } )
+        , ( "clone-idle", { duration = 100, frames = [ ( 0, 100 ) ] } )
+        , ( "clone-move", { duration = 200, frames = [ ( 0, 100 ), ( 0, 100 ) ] } )
+        , ( "clone-fire", { duration = 400, frames = [ ( 0, 100 ), ( 0, 100 ), ( 0, 100 ), ( 0, 100 ) ] } )
         , ( "ground-idle", { duration = 100, frames = [ ( 0, 100 ) ] } )
         , ( "slug-idle", { duration = 100, frames = [ ( 0, 100 ) ] } )
         , ( "healthCrate-idle", { duration = 100, frames = [ ( 0, 100 ) ] } )
