@@ -1,9 +1,11 @@
-#### TODO
-* [x] Fix memory leak...
-* [x] Additional textures for enemies
-* [x] Clean up
-  - [x] Modularisation
-  - [x] Optimisation
+#### TODO for v1.0
+* [ ] Optimisation
+    - [ ] Better modularisation
+    - [ ] Better documentation
+    - [ ] Instancing? 
+* [ ]  Multiplayer
+* [ ]  More character classes
+* [ ]  Refine AI
 
 #### DONE
 * [x] Menu
@@ -22,8 +24,8 @@
     * [x] Rockets
 * [x] Fix disappearing enemies bug
 * [x] Fix enemies sticking together on collision bug
-
-#### Optional items
-* [ ] (optional) Add more character classes
-* [ ] (optional) Refine AI
-* [ ] (optional) Multiplayer
+* [x] Fix memory leak...
+* [x] Additional textures for enemies
+* [x] Clean up
+  - [x] Modularisation
+  - [x] Optimisation
