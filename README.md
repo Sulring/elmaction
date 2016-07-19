@@ -9,7 +9,7 @@ The goal is simple: kill waves of enemies and try not to die as long as you can.
 WASD + Mouse (Rockets = Shift + Left Click)
 
 **Compilation**
-elm-make src/game.elm --output=output/game.js
+elm-make src/game.elm --output=game.js
 
 To run the game open game.html using some http-server (Apache or similar) to avoid cross-domain problems caused by loading images.
 
