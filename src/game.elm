@@ -327,7 +327,7 @@ update action model =
                                         if actor.actorType == Player then
                                             20
                                         else
-                                            5
+                                            if model.gameDifficulty then 10 else 5
                                 in
                                     Dict.insert slugname (templateSlugActor model.gameSpeed (slugint) newPosition direction damage) model.actorManager
             in
@@ -360,18 +360,19 @@ update action model =
                     model.last_i + 1
 
                 am =
-                    if rand < 50 then
+                    if rand < 20 then
                         let
                             slugname =
                                 "health-" ++ (toString (model.last_i + 1))
                         in
                             Dict.insert slugname (templateHealthActor model.gameSpeed (slugint) position) model.actorManager
-                    else
+                    else if rand >= 20 && rand < 40 then
                         let
                             slugname =
                                 "rocketCrate-" ++ (toString (model.last_i + 1))
                         in
                             Dict.insert slugname (templateRocketCrateActor model.gameSpeed (slugint) position) model.actorManager
+                    else model.actorManager
             in
                 ( { model
                     | last_i = model.last_i + 1
