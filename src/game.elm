@@ -209,13 +209,20 @@ update action model =
                 ca =
                     getCharacterAttributes model playerActor
 
+                scoreToAdd =
+                    if model.gameDifficulty
+                        then
+                            i*2
+                        else
+                            i
+
                 newModel =
                     { model
                         | actorManager =
                             updateActorManagerDict playerActor
                                 { player
                                     | characterAttributes =
-                                        (Just { ca | score = ca.score + i })
+                                        (Just { ca | score = ca.score + scoreToAdd })
                                 }
                                 model.actorManager
                         , score = ca.score + i
@@ -392,6 +399,7 @@ update action model =
                             { newModel
                                 | textures = model.textures
                                 , wsize = model.wsize
+                                , gameDifficulty = model.gameDifficulty
                             }
 
                 EnterName ->
@@ -410,26 +418,20 @@ update action model =
                     ( { model | status = s }, Task.perform SoundError PlaySound (succeed "beep2") )
 
         SetGameSpeed i ->
-            ( { model | gameSpeed = i }, Task.perform SoundError ChangeStatus (succeed Types.Options) )
+            update (ChangeStatus Types.Options) { model | gameSpeed = i }
 
         SetGameDifficulty i ->
-            ( { model | gameDifficulty = i }, Task.perform SoundError ChangeStatus (succeed Types.Options) )
+            update (ChangeStatus Types.Options) { model | gameDifficulty = i }
 
         EnterButton ->
             if model.status == EnterName then
-                ( model
-                , if String.isEmpty model.playerName then
-                    Cmd.none
-                  else
-                    Task.perform SoundError ChangeStatus (succeed Help)
-                )
+                if String.isEmpty model.playerName
+                    then
+                        (model, Cmd.none)
+                    else
+                        update (ChangeStatus Help) model
             else
-                ( model
-                , if String.isEmpty model.playerName then
-                    Cmd.none
-                  else
-                    Task.perform SoundError ChangeStatus (succeed Game)
-                )
+                update (ChangeStatus Game) model
 
         ExitButton ->
             case model.status of
@@ -443,13 +445,13 @@ update action model =
                     update (ChangeStatus MainMenu) model
 
                 Speed ->
-                    ( model, Task.perform SoundError ChangeStatus (succeed Types.Options) )
+                    update (ChangeStatus Types.Options) model
 
                 Difficulty ->
-                    ( model, Task.perform SoundError ChangeStatus (succeed Types.Options) )
+                    update (ChangeStatus Types.Options) model
 
                 _ ->
-                    ( model, Task.perform SoundError ChangeStatus (succeed MainMenu) )
+                    update (ChangeStatus MainMenu) model
 
 
 
