@@ -615,6 +615,63 @@ getFrame i list =
         [] ->
             0
 
+calculatePositions : Actor -> { start : Float, end : Float, rows: Float }
+calculatePositions actor =
+    let
+        cols =
+            let
+                framedTexture =
+                    Dict.get actor.texture framedTextures
+            in
+                case framedTexture of
+                    Nothing ->
+                        1.0
+
+                    Just x ->
+                        if snd x then
+                            1.0 / (toFloat (fst x))
+                        else
+                            toFloat (fst x)
+
+        anim =
+            actor.animation
+
+        frame =
+            let
+                frames =
+                    Dict.get (actor.texture ++ "-" ++ anim.name) animationDict
+            in
+                case frames of
+                    Nothing ->
+                        0.0
+
+                    Just x ->
+                        let
+                            fs =
+                                x.frames
+                        in
+                            toFloat (getFrame anim.current fs)
+
+        start =
+            frame / cols
+
+        end = cols
+    --        start + (1.0 / cols)
+
+        rows =
+            if cols < 1 then
+                cols
+            else
+                1
+
+
+    in
+        { start = start, end = end, rows = rows }
+
+
+
+
+{-
 
 animatedSprite : Actor -> Drawable { pos : Vec3, coord : Vec3 }
 animatedSprite actor =
@@ -687,7 +744,7 @@ animatedSprite actor =
     in
         Triangle result
 
-
+-}
 
 -- VIEW
 
@@ -710,28 +767,34 @@ perspectiveMatrix ratio =
 
 addActorToScene : Actor -> Model -> List Renderable
 addActorToScene actor model =
-    case Dict.get actor.texture model.textures of
-        Nothing ->
-            []
+    let
+        tPos = calculatePositions actor
+    in
+        case Dict.get actor.texture model.textures of
+            Nothing ->
+                []
 
-        Just texture ->
-            [ render vertexShader
-                fragmentShader
-                (animatedSprite actor)
-                { tex = texture
-                , perspective =
-                    List.foldr mul
-                        Math.Matrix4.identity
-                        [ perspective model.wsize
-                        , if actor.actorType == Player then
-                            makeTranslate actor.renderPosition
-                          else
-                            makeTranslate actor.renderPosition
-                        , actor.rotation
-                        , makeTranslate actor.spriteCentering
-                        ]
-                }
-            ]
+            Just texture ->
+                [ render vertexShader
+                    fragmentShader
+                    actor.actorSprite
+                    { tex = texture
+                    , start = tPos.start
+                    , end = tPos.end
+                    , rows = tPos.rows
+                    , perspective =
+                        List.foldr mul
+                            Math.Matrix4.identity
+                            [ perspective model.wsize
+                            , if actor.actorType == Player then
+                                makeTranslate actor.renderPosition
+                              else
+                                makeTranslate actor.renderPosition
+                            , actor.rotation
+                            , makeTranslate actor.spriteCentering
+                            ]
+                    }
+                ]
 
 
 addActorsToScene : Model -> List Renderable
@@ -983,17 +1046,19 @@ void main () {
 |]
 
 
-fragmentShader : Shader {} { u | tex : Texture } { vcoord : Vec2 }
+fragmentShader : Shader { } { u | tex : Texture, start : Float, end : Float, rows: Float } { vcoord : Vec2 }
 fragmentShader =
     [glsl|
 
 precision mediump float;
 uniform sampler2D tex;
 varying vec2 vcoord;
+uniform float start;
+uniform float end;
+uniform float rows;
 
 void main () {
-
-    gl_FragColor  =  texture2D(tex, vcoord);
+    gl_FragColor  =  texture2D(tex, vec2((vcoord.x)/end, vcoord.y/rows) + vec2(start,0));
 
 }
 

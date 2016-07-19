@@ -867,6 +867,29 @@ playerActor : String
 playerActor =
     "Player1"
 
+animatedSprite : Float -> Drawable { pos : Vec3, coord : Vec3 }
+animatedSprite s =
+    let
+        spriteSize = s
+        topLeft =
+            { pos = vec3 -spriteSize spriteSize 0, coord = vec3 0 1 0 }
+
+        topRight =
+            { pos = vec3 spriteSize spriteSize 0, coord = vec3 1 1 0 }
+
+        bottomLeft =
+            { pos = vec3 -spriteSize -spriteSize 0, coord = vec3 0 0 0 }
+
+        bottomRight =
+            { pos = vec3 spriteSize -spriteSize 0, coord = vec3 1 0 0 }
+
+        result =
+            [ ( topLeft, topRight, bottomLeft )
+            , ( bottomLeft, topRight, bottomRight )
+            ]
+    in
+        Triangle result
+
 templatePlayerActor : String -> Actor
 templatePlayerActor name =
     { key = name
@@ -886,6 +909,7 @@ templatePlayerActor name =
     , speed = 0.2
     , randomVal = 0
     , texture = "assault"
+    , actorSprite = animatedSprite 0.35
     , animation =
         { name = "idle"
         , current = 0
@@ -934,6 +958,7 @@ explode act =
     ( { act
         | timeToLive = Just 800
         , texture = "explosion"
+        , actorSprite = animatedSprite 1.5
         , animation =
             { name = "idle"
             , current = 0
@@ -953,6 +978,7 @@ death act =
         | timeToLive = Just 400
         , actorType = Object
         , texture = "death"
+        , actorSprite = animatedSprite 0.2
         , animation =
             { name = "idle"
             , current = 0
@@ -984,6 +1010,7 @@ templateEnemyActor gameSpeed name p rates =
     , speed = 0.8
     , randomVal = rates
     , texture = "assault"
+    , actorSprite = animatedSprite 0.25
     , animation =
         { name = "idle"
         , current = 0
@@ -1067,6 +1094,7 @@ templateSlugActor gameSpeed i p r d =
         , index = 9
         , size = 0.2
         , texture = "slug"
+        , actorSprite = animatedSprite 0.2
         , randomVal = 0
         , animation =
             { name = "idle"
@@ -1120,6 +1148,7 @@ templateRocketActor gameSpeed i p t r =
         , index = 9
         , size = 0.3
         , texture = "rocket"
+        , actorSprite = animatedSprite 0.3
         , randomVal = 0
         , animation =
             { name = "idle"
@@ -1165,6 +1194,7 @@ templateHealthActor gameSpeed i p =
         , index = 6
         , size = 0.1
         , texture = "healthCrate"
+        , actorSprite = animatedSprite 0.1
         , randomVal = 0
         , animation =
             { name = "idle"
@@ -1230,6 +1260,7 @@ templateRocketCrateActor gameSpeed i p =
         , index = 6
         , size = 0.1
         , texture = "rocketCrate"
+        , actorSprite = animatedSprite 0.1
         , randomVal = 0
         , animation =
             { name = "idle"
@@ -1284,6 +1315,7 @@ templateGroundActor =
     , index = 10
     , size = 20
     , texture = "ground"
+    , actorSprite = animatedSprite 20
     , randomVal = 0
     , animation =
         { name = "idle"

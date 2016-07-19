@@ -249,6 +249,7 @@ type alias Actor =
     , texture :
         String
         -- texture
+    , actorSprite : Drawable { pos : Vec3, coord : Vec3 }
     , randomVal : Int
     , position :
         Vec3
