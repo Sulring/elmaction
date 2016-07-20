@@ -141,7 +141,7 @@ update action model =
         UpdateMouse pos ->
             ( { model | mousePosition = pos, lookAt = (calculateDirection pos model.wsize) }, Cmd.none )
 
-        KeyChange ( keyfunc, plus ) ->
+        KeyChange keyfunc ->
             ( { model | keys = keyfunc model.keys }, Cmd.none )
 
         MouseClicks pos ->
@@ -520,12 +520,12 @@ keyPressed keyCode =
             EnterButton
 
         _ ->
-            ( Basics.identity, Nothing ) |> KeyChange
+            Basics.identity |> KeyChange
 
 
 keyChange : Bool -> Keyboard.KeyCode -> Msg
 keyChange on keyCode =
-    ( (case keyCode of
+    (case keyCode of
         65 ->
             \k -> { k | left = on }
 
@@ -550,29 +550,7 @@ keyChange on keyCode =
         _ ->
             Basics.identity
       )
-    , (case keyCode of
-        109 ->
-            if on then
-                Just False
-            else
-                Nothing
-
-        107 ->
-            if on then
-                Just True
-            else
-                Nothing
-
-        _ ->
-            Nothing
-      )
-    )
         |> KeyChange
-
-
-
-
-
 
 
 port scoreBoard : (Scores -> msg) -> Sub msg
