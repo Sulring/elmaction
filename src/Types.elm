@@ -144,7 +144,7 @@ type Msg
       -- main loop
     | UpdateMouse Position
       -- saving new mouse position
-    | KeyChange ( Keys -> Keys, Maybe Bool )
+    | KeyChange ( Keys -> Keys )
       -- marking pressed button
     | PlayMusic String
       -- play music
